@@ -33,8 +33,8 @@ dependencies = [
 license-files = ["LICEN[CS]E*"]
 
 [project.urls]
-Homepage = "https://gitlab.fme.lan/petersen/meval"
-Issues = "https://gitlab.fme.lan/petersen/meval/-/issues"
+Homepage = "https://github.com/FraunhoferMEVIS/meval"
+Issues = "https://github.com/FraunhoferMEVIS/meval/issues"
 
 [tool.setuptools]
 packages = ["meval", "meval.metrics"]
