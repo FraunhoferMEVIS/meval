@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meval"
+dynamic = ["version"]
+authors = [
+  {name="Eike Petersen", email="eike.petersen@mevis.fraunhofer.de"},
+  {name="Dishantkumar Sutariya"},
+]
+description = "Statistical analyses of ML model performance in subgroups."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+	"betacal",
+	"jinja2",
+	"kaleido==0.1.0.post1",
+	"numpy",
+	"pandas",
+	"pandera>=0.24.0",
+	"plotly",
+	"scikit-learn",
+	"scipy",
+	"seaborn",
+	"statsmodels",
+	"tqdm",
+]
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://gitlab.fme.lan/petersen/meval"
+Issues = "https://gitlab.fme.lan/petersen/meval/-/issues"
+
+[tool.setuptools]
+packages = ["meval", "meval.metrics"]
+
+[tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "."
+]

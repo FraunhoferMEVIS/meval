@@ -1,0 +1,15 @@
+__pycache__/*
+*/__pycache__
+*/*/__pycache__
+meval/meval.egg-info/*
+meval.egg-info/*
+build/*
+dist/*
+*.txt
+*.lprof
+.vscode/
+*.pkl
+*.npy
+*.chkpt
+.coverage
+demos/*/runs
