@@ -114,4 +114,4 @@ This project is under a non-commercial license, for details refer to [the licens
 The software is not qualified for use as a medical product or as part thereof. Provided 'as is' without specific verification or validation.
 
 ## Contact
-Eike Petersen, Fraunhofer Institute for Digital Medicine MEVIS, Germany. eike dot petersen at mevis dot fraunhofer dot de.
+Eike Petersen, Fraunhofer Institute for Digital Medicine MEVIS, Germany.
