@@ -19,7 +19,7 @@ classifiers = [
 dependencies = [
 	"betacal",
 	"jinja2",
-	"kaleido==0.1.0.post1",
+	"kaleido>=1.1.0",
 	"numpy",
 	"pandas",
 	"pandera>=0.24.0",
