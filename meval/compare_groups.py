@@ -93,7 +93,9 @@ def compare_groups(df: pd.DataFrame,
                    report_file: Optional[str] = None, 
                    add_all_group: bool = True,
                    threshold: Optional[float] = None,
-                   max_plot_groups: int = 12
+                   max_plot_groups: int = 12,
+                   analysis_groups: Optional[Sequence[str]] = None,
+                   plot_groups: Optional[Sequence[str]] = None
                    ) -> tuple[pd.DataFrame, list[str]]:
     # df should contain group vars, score/performance metrics, any additional metadata that are available
     # group_interactions = (None, int - interaction levels). If None or 0, only top-level groups are compared.
@@ -103,34 +105,38 @@ def compare_groups(df: pd.DataFrame,
     ### A: DETERMINE GROUPS FOR WHICH TO EVALUATE THE MODEL SEPARATELY ###
     # ------------------------------------------------------------------ #
 
-    if add_all_group:
-        analysis_groups = [{}]  # 'all' group
-    else:
-        analysis_groups = []
-
-    if group_by is None:
-        assert group_interactions is None or group_interactions == 0
-        assert add_all_group
-    else:
-        # Are subgroups determined by the intersection of multiple attributes to be considered, and if yes, how/which?
-        if isinstance(group_by, str):
-            group_by = [group_by]
-
-        for attr in group_by:
-            assert len(df[attr].unique()) > 1, "Requested grouping/stratifying by a variable which only takes on a single value."
-        
-        if group_interactions is None or group_interactions == 0:
-            for attribute in group_by:
-                analysis_groups = analysis_groups + [{attribute: v} for v in df[attribute].unique()]
-        elif isinstance(group_interactions, int):  # int analyze_subgroups specifies the maximum grouping variable combination depth
-            assert group_interactions < len(group_by)
-            analysis_groups = analysis_groups + get_group_combinations(df, group_by, group_interactions)
-            analysis_groups = [grp for grp in analysis_groups if GroupFilter(grp)(df).sum() >= min_subgroup_size]
+    if not analysis_groups:
+        if add_all_group:
+            analysis_groups = [{}]  # 'all' group
         else:
-            raise NotImplementedError
-        
-    analysis_group_filters = [GroupFilter(group_attribute_dict) for group_attribute_dict in analysis_groups]
+            analysis_groups = []
 
+        if group_by is None:
+            assert group_interactions is None or group_interactions == 0
+            assert add_all_group
+        else:
+            # Are subgroups determined by the intersection of multiple attributes to be considered, and if yes, how/which?
+            if isinstance(group_by, str):
+                group_by = [group_by]
+
+            for attr in group_by:
+                assert len(df[attr].unique()) > 1, "Requested grouping/stratifying by a variable which only takes on a single value."
+            
+            if group_interactions is None or group_interactions == 0:
+                for attribute in group_by:
+                    analysis_groups = analysis_groups + [{attribute: v} for v in df[attribute].unique()]
+            elif isinstance(group_interactions, int):  # int analyze_subgroups specifies the maximum grouping variable combination depth
+                assert group_interactions < len(group_by)
+                analysis_groups = analysis_groups + get_group_combinations(df, group_by, group_interactions)
+                analysis_groups = [grp for grp in analysis_groups if GroupFilter(grp)(df).sum() >= min_subgroup_size]
+            else:
+                raise NotImplementedError
+            
+        analysis_group_filters = [GroupFilter(group_attribute_dict) for group_attribute_dict in analysis_groups]        
+
+    else:
+        analysis_group_filters = [GroupFilter(group_repr_str=groupname, col_types=df.dtypes.to_dict()) for groupname in analysis_groups]
+        
 
     # ------------------------------------------------------- #
     ### B: COMPUTE METRICS OVER THE DETERMINED (SUB-)GROUPS ###
@@ -257,11 +263,12 @@ def compare_groups(df: pd.DataFrame,
     # ------------------------------------------------------- #
     start_time = time.time()
 
-    plot_groups = select_extreme_tested_groups(
-        all_metric_results_df=all_metric_results_df, 
-        metrics=[metric for metric in metrics if not metric.is_descriptive],
-        n_groups=max_plot_groups,
-        add_all_group=True)
+    if not plot_groups:
+        plot_groups = select_extreme_tested_groups(
+            all_metric_results_df=all_metric_results_df, 
+            metrics=[metric for metric in metrics if not metric.is_descriptive],
+            n_groups=max_plot_groups,
+            add_all_group=True)
 
     if report_file is not None:
         if report_file.endswith(".html"):
