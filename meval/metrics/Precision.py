@@ -15,7 +15,7 @@ class Precision(ThresholdedComparisonMetric):
             metric_name='Prec',
             threshold=threshold,
             reference_class='self',
-            needs_pos_and_neg=False,
+            needs_all_classes=False,
             is_descriptive=False,
             test=test
         )

@@ -11,7 +11,7 @@ class Count(ComparisonMetric):
         super().__init__(
             req_cols=[],
             metric_name='Count',
-            needs_pos_and_neg=False,
+            needs_all_classes=False,
             reference_class='self',
             is_descriptive=True,
             test=test

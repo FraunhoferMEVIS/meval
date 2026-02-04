@@ -21,7 +21,7 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
             req_cols=[ComparisonMetric.y_true_cols, ComparisonMetric.y_pred_prob_cols],
             metric_name="AUROC",
             reference_class="self",  # ?????? https://proceedings.neurips.cc/paper_files/paper/2019/file/73e0f7487b8e5297182c5a711d20bf26-Paper.pdf
-            needs_pos_and_neg=True,
+            needs_all_classes=True,
             is_descriptive=False,
             test=test
         )

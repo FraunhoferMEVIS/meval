@@ -15,7 +15,7 @@ class Recall(ThresholdedComparisonMetric):
             metric_name='Rec',
             threshold=threshold,
             reference_class='self',
-            needs_pos_and_neg=False,
+            needs_all_classes=False,
             is_descriptive=False,
             test=test
         )

@@ -12,7 +12,7 @@ class ProportionOfPos(ComparisonMetric):
             req_cols=[ComparisonMetric.y_true_cols],
             metric_name='p(y=1|G=g)',
             reference_class='self',
-            needs_pos_and_neg=False,
+            needs_all_classes=False,
             is_descriptive=False,
             test=test
         )

@@ -12,7 +12,7 @@ class Average(ComparisonMetric):
             req_cols=[metric_col],
             metric_name="Avg(" + metric_col + ")",
             reference_class="self",
-            needs_pos_and_neg=False,
+            needs_all_classes=False,
             is_descriptive=False,
             test=test
         )

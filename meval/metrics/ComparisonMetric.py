@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Sequence
+import numpy as np
 import pandas as pd
 import pandera.pandas as pa
 import plotly.graph_objects as go
@@ -12,11 +13,14 @@ class ComparisonMetric(ABC):
     y_true_cols = ['y_true', 'label', 'y', 'target']
     y_pred_prob_cols = ['y_pred_prob', 'y_prob']
     y_pred_cols = ['y_pred'] + y_pred_prob_cols
+    
+    # multiclass case: we don't know how many classes there are; check for the right format of at least class 0
+    y_pred_prob_cols_mc = ['y_pred_prob_0', 'y_prob_0']
 
     req_cols: Sequence[Sequence[str] | str]
     metric_name: str
     reference_class: str
-    needs_pos_and_neg: bool
+    needs_all_classes: bool
     is_descriptive: bool
     test: bool
 
@@ -25,14 +29,14 @@ class ComparisonMetric(ABC):
             req_cols: Sequence[Sequence[str] | str],
             metric_name: str,
             reference_class: str,
-            needs_pos_and_neg: bool,
+            needs_all_classes: bool,
             is_descriptive: bool,
             test: bool = False
     ):
         self.req_cols = req_cols
         self.metric_name = metric_name
         self.reference_class = reference_class
-        self.needs_pos_and_neg = needs_pos_and_neg
+        self.needs_all_classes = needs_all_classes
         self.is_descriptive = is_descriptive
         self.test = test
 
@@ -85,13 +89,39 @@ class ComparisonMetric(ABC):
                 y_true = df[colname][mask]
                 break
         else:
-            raise RuntimeError(f"Found no binary label column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_true_cols}.")
+            raise RuntimeError(f"Found no label column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_true_cols}.")
 
         if validate:
             pa.SeriesSchema(bool, nullable=False, unique=False).validate(y_true)
 
         return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
     
+    @staticmethod
+    def get_multiclass_y_true(
+        df: pd.DataFrame, 
+        group_filter: Optional[GroupFilter] = None, 
+        mask: Optional[pd.Series] = None,
+        validate: bool = True
+        ) -> pd.Series:
+
+        if mask is None:
+            if group_filter is None:
+                mask = pd.Series([True] * len(df.index), index=df.index)
+            else:
+                mask = group_filter(df, validate=validate)
+
+        for colname in ComparisonMetric.y_true_cols:
+            if colname in df.columns:
+                y_true = df[colname][mask]
+                break
+        else:
+            raise RuntimeError(f"Found no label column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_true_cols}.")
+
+        if validate:
+            pa.SeriesSchema(int, nullable=False, unique=False).validate(y_true)
+
+        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be an int series
+
     @staticmethod
     def get_binary_y_pred_prob(
         df: pd.DataFrame, 
@@ -123,6 +153,56 @@ class ComparisonMetric(ABC):
 
         return y_pred_prob  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
 
+    @staticmethod
+    def get_multiclass_y_pred_prob(
+        df: pd.DataFrame, 
+        group_filter: Optional[GroupFilter] = None,
+        mask: Optional[pd.Series] = None,
+        validate: bool = True
+        ) -> pd.DataFrame:
+
+        if mask is None:
+            if group_filter is None:
+                mask = pd.Series([True] * len(df.index), index=df.index)
+            else:
+                mask = group_filter(df, validate=validate)
+
+        # Find all y_pred_prob columns (format: y_pred_prob_{cls_id})
+        y_pred_prob_cols = [col for col in df.columns if col.startswith("y_pred_prob_")]
+        
+        if len(y_pred_prob_cols) == 0:
+            raise RuntimeError("Found no pred_prob columns in the provided dataframe. Expected columns of the form 'y_pred_prob_{cls_id}'.")
+        
+        # Extract class IDs and sort to ensure consistent ordering
+        class_ids = []
+        for col in y_pred_prob_cols:
+            try:
+                cls_id = int(col.replace("y_pred_prob_", ""))
+                class_ids.append(cls_id)
+            except ValueError:
+                raise RuntimeError(f"Invalid column name '{col}'. Expected format 'y_pred_prob_{{cls_id}}' where cls_id is an integer.")
+        
+        # Sort columns by class ID
+        sorted_cols = [f"y_pred_prob_{cls_id}" for cls_id in sorted(class_ids)]
+        
+        # Extract the dataframe with masked rows
+        y_pred_prob = df.loc[mask, sorted_cols]
+        
+        if validate:
+            # Validate that all columns are float and in [0, 1]
+            for col in sorted_cols:
+                pa.SeriesSchema(float, 
+                                checks=[pa.Check.greater_than_or_equal_to(0.0),
+                                        pa.Check.less_than_or_equal_to(1.0)],
+                                nullable=False, 
+                                unique=False
+                                ).validate(y_pred_prob[col])
+            
+            # Optionally: validate that probabilities sum to 1 (or close to it) for each row
+            row_sums = y_pred_prob.sum(axis=1)
+            assert np.allclose(row_sums, 1.0, atol=1e-6), "Predicted probabilities must sum to 1 for each sample"
+
+        return y_pred_prob  # type: ignore
 
     def get_binary_y_pred(
             self, 
@@ -184,14 +264,14 @@ class CurveBasedComparisonMetric(ComparisonMetric):
             req_cols: Sequence[Sequence[str] | str],
             metric_name: str,
             reference_class: str,
-            needs_pos_and_neg: bool,
+            needs_all_classes: bool,
             is_descriptive: bool,
             test: bool = False
     ):
         super().__init__(req_cols=req_cols,
                          metric_name=metric_name,
                          reference_class=reference_class,
-                         needs_pos_and_neg=needs_pos_and_neg,
+                         needs_all_classes=needs_all_classes,
                          is_descriptive=is_descriptive,
                          test=test)
 

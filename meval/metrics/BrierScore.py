@@ -13,7 +13,7 @@ class BrierScore(ComparisonMetric):
             req_cols=[ComparisonMetric.y_true_cols, ComparisonMetric.y_pred_prob_cols],
             metric_name='BS (bal)' if balanced else 'BS',
             reference_class='self',
-            needs_pos_and_neg=True if balanced else False,
+            needs_all_classes=True if balanced else False,
             is_descriptive=False,
             test=test
         )

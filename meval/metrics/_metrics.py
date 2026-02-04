@@ -4,7 +4,7 @@ import numpy.typing as npt
 import pandas as pd
 from sklearn.exceptions import UndefinedMetricWarning
 from sklearn.metrics import precision_recall_curve, roc_auc_score, roc_curve
-from typing import Optional
+from typing import Optional, Literal
 
 from ..config import settings
 from ..stats import bootstrap_curve
@@ -257,16 +257,47 @@ def bootstrap_pr_curve(
         return recall, precision, precision_bs
 
 
-def auroc(target, preds) -> float:
-    if sum(target) > 0 and sum(target == 0) > 0:
-        # There are both positive and negative examples
-        warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
-        r = roc_auc_score(target, preds)
-        warnings.filterwarnings("default", category=UndefinedMetricWarning)
-    else: 
-        r = np.nan
+def auroc(target: npt.NDArray[np.bool] | npt.NDArray[np.integer], 
+          preds: npt.NDArray[np.floating], 
+          multiclass_mode: Literal["binary", "ovr", "ovo"] = "binary"
+          ) -> float:
+    """
+    Compute AUROC for binary or multiclass classification.
+    
+    Parameters:
+        target: True labels (binary or multiclass integers)
+        preds: Predicted probabilities. For multiclass, should be shape (n_samples, n_classes)
+        multiclass_mode: Either "ovr" (One-vs-Rest) or "ovo" (One-vs-One) for multiclass
+        
+    Returns:
+        AUROC score, or np.nan if undefined
+    """
+    classes = np.unique(target)
+    n_classes = len(classes)
+    
+    if multiclass_mode == "binary":
+        # Binary case: check for both positive and negative examples
+        if sum(target == classes[0]) > 0 and sum(target == classes[1]) > 0:
+            warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
+            r = roc_auc_score(target, preds)
+            warnings.filterwarnings("default", category=UndefinedMetricWarning)
+        else:
+            r = np.nan
+    else:
+        # Ensure preds is 2D with shape (n_samples, n_classes)
+        assert preds.ndim == 2, f"For multiclass, preds must be 2D, got shape {preds.shape}"
+        assert preds.shape[0] == len(target), f"Number of predictions ({preds.shape[0]}) must match number of targets ({len(target)})"
+        assert preds.shape[1] >= max(n_classes, 2), f"Number of probability columns ({preds.shape[1]}) must be greater than or equal to the number of classes ({n_classes})"
 
-    return r # type: ignore
+        # Multiclass case: check that we have all classes present
+        if n_classes < preds.shape[1]:
+            r = np.nan
+        else:
+            warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
+            r = roc_auc_score(target, preds, multi_class=multiclass_mode)
+            warnings.filterwarnings("default", category=UndefinedMetricWarning)
+    
+    return r  # type: ignore
 
 
 def brier_scores(

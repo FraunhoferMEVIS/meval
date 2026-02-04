@@ -20,7 +20,7 @@ class DRMSCE(CurveBasedComparisonMetric):
             req_cols=[ComparisonMetric.y_true_cols, ComparisonMetric.y_pred_prob_cols],
             metric_name = 'DRMSCE',
             reference_class = 'self',
-            needs_pos_and_neg = False,
+            needs_all_classes = False,
             is_descriptive = False,
             test=test
         )

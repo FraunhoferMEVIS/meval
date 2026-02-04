@@ -38,20 +38,25 @@ def variance_of_proportion(numerator: int, denominator: int) -> float:
 
 
 def decide_stratify(
-        y_true: pd.Series | npt.NDArray[np.bool], 
+        y_true: pd.Series | npt.NDArray[np.bool] | npt.NDArray[np.integer], 
         threshold: int = 10
-        ) -> tuple[bool, int, int]:
-
-    N_pos = (y_true == 1).sum()
-    N_neg = (y_true == 0).sum()
-    assert N_pos + N_neg == len(y_true)
-
-    if N_pos < threshold or N_neg < threshold:
-        stratify = True
-    else:
-        stratify = False   
-
-    return stratify, N_pos, N_neg
+        ) -> tuple[bool, dict[int, int]]:
+    """
+    Decide whether to stratify based on class counts.
+    
+    Returns:
+        stratify: Whether to use stratified sampling
+        class_counts: Dictionary mapping class labels to their counts
+    """
+    classes = np.unique(y_true)
+    class_counts = {cls: (y_true == cls).sum() for cls in classes}
+    
+    assert sum(class_counts.values()) == len(y_true)
+    
+    # Stratify if any class has fewer than threshold samples
+    stratify = any(count < threshold for count in class_counts.values())
+    
+    return stratify, class_counts
 
 
 def bootstrap_metric(
@@ -73,16 +78,21 @@ def bootstrap_metric(
             
         N_sample = group_mask.sum()
 
-        if metric.needs_pos_and_neg:
-            y_true = ComparisonMetric.get_binary_y_true(df, mask=group_mask, validate=False)
-            stratify, N_pos, N_neg = decide_stratify(y_true)
+        if metric.needs_all_classes:
+            y_true = ComparisonMetric.get_multiclass_y_true(df, mask=group_mask, validate=False)
+            stratify, class_counts = decide_stratify(y_true)
         else:
             stratify = False
 
         if stratify:
-            bs_idces_pos = rng.choice(df.index[group_mask][y_true == 1], (N_pos, num_bootstrap), replace=True)
-            bs_idces_neg = rng.choice(df.index[group_mask][y_true == 0], (N_neg, num_bootstrap), replace=True)
-            bs_idces_all = np.concatenate([bs_idces_pos, bs_idces_neg], axis=0)
+            # Stratified sampling: sample from each class separately
+            bs_idces_by_class = []
+            for cls, count in class_counts.items():
+                cls_indices = df.index[group_mask][y_true == cls]
+                bs_idces_cls = rng.choice(cls_indices, (count, num_bootstrap), replace=True)
+                bs_idces_by_class.append(bs_idces_cls)
+            bs_idces_all = np.concatenate(bs_idces_by_class, axis=0)            
+
         else:
             bs_idces_all = rng.choice(df.index[group_mask], (N_sample, num_bootstrap), replace=True)
 
@@ -271,12 +281,15 @@ def studentized_permut_pval(
 
 
 def bootstrap_curve(
-        target: npt.NDArray[np.bool], 
+        target: npt.NDArray[np.bool] | npt.NDArray[np.integer], 
         pred_probs: npt.NDArray[np.floating], 
         curve_fun: Callable[..., np.ndarray], 
         num_bootstraps: int, 
         num_samples: int
         ) -> np.ndarray:
+
+    if len(np.unique(target)) >= 3:
+        raise NotImplementedError("bootstrap_curve called with multiclass target but only implemented for the binary case.")
 
     rng = RandomState.get_rng()
 
@@ -284,14 +297,18 @@ def bootstrap_curve(
 
     yvals_bs = np.zeros((num_bootstraps, num_samples)) * np.nan
 
-    stratify, N_pos, N_neg = decide_stratify(target)
+    stratify, class_counts = decide_stratify(target)
 
     for bs_idx in range(num_bootstraps):
         
         if stratify:
-            bs_idces_pos = rng.choice(np.flatnonzero(target == 1), N_pos)
-            bs_idces_neg = rng.choice(np.flatnonzero(target == 0), N_neg)
-            bs_idces = np.concatenate([bs_idces_pos, bs_idces_neg])
+            # Stratified sampling: sample from each class separately
+            bs_idces_by_class = []
+            for cls, count in class_counts.items():
+                bs_idces_cls = rng.choice(np.flatnonzero(target == cls), count, replace=True)
+                bs_idces_by_class.append(bs_idces_cls)
+            bs_idces = np.concatenate(bs_idces_by_class, axis=0)  
+
         else:
             bs_idces = rng.choice(range(N_predictions), N_predictions)
 

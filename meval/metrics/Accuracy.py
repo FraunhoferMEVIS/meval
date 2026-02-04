@@ -15,7 +15,7 @@ class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithA
             req_cols=[ComparisonMetric.y_true_cols, ComparisonMetric.y_pred_cols],
             metric_name='Acc',
             reference_class='self',
-            needs_pos_and_neg=False,
+            needs_all_classes=False,
             is_descriptive=False,
             test=test
         )
