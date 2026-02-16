@@ -277,7 +277,7 @@ def auroc(target: npt.NDArray[np.bool] | npt.NDArray[np.integer],
     
     if multiclass_mode == "binary":
         # Binary case: check for both positive and negative examples
-        if sum(target == classes[0]) > 0 and sum(target == classes[1]) > 0:
+        if n_classes == 2:
             warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
             r = roc_auc_score(target, preds)
             warnings.filterwarnings("default", category=UndefinedMetricWarning)
