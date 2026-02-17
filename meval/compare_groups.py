@@ -95,7 +95,8 @@ def compare_groups(df: pd.DataFrame,
                    threshold: Optional[float] = None,
                    max_plot_groups: int = 12,
                    analysis_groups: Optional[Sequence[str]] = None,
-                   plot_groups: Optional[Sequence[str]] = None
+                   plot_groups: Optional[Sequence[str]] = None,
+                   test_correction_method: str = "fdr_bh"  # assumes non-negatively related tests
                    ) -> tuple[pd.DataFrame, list[str]]:
     # df should contain group vars, score/performance metrics, any additional metadata that are available
     # group_interactions = (None, int - interaction levels). If None or 0, only top-level groups are compared.
@@ -238,7 +239,7 @@ def compare_groups(df: pd.DataFrame,
         pvals = all_metric_results_df[pval_cols].values[mask.values]
         if len(pvals) > 0:
             _, pvals_transformed, _, _ = multipletests(pvals, 
-                                                       method="holm",
+                                                       method=test_correction_method,
                                                        is_sorted=False, 
                                                        returnsorted=False)
             assert pvals_transformed.shape == pvals.shape
