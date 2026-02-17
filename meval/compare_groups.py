@@ -105,6 +105,8 @@ def compare_groups(df: pd.DataFrame,
     ### A: DETERMINE GROUPS FOR WHICH TO EVALUATE THE MODEL SEPARATELY ###
     # ------------------------------------------------------------------ #
 
+    assert len(df) >= min_subgroup_size, "The entire dataset is smaller than the specified minimum subgroup size."
+
     if not analysis_groups:
         if add_all_group:
             analysis_groups = [{}]  # 'all' group
@@ -245,7 +247,15 @@ def compare_groups(df: pd.DataFrame,
             assert np.all(pvals_transformed >= 0) and np.all(pvals_transformed <= 1)
             assert np.all(pvals_transformed <= (len(pvals) * pvals))  # this would be Bonferroni
             
-            all_metric_results_df[pval_cols].values[mask.values] = pvals_transformed
+            # The following line does NOT work since df[cols].values = ... only changes a view of the df, not the df
+            #all_metric_results_df[pval_cols].values[mask.values] = pvals_transformed
+            # df.loc[mask, pval_Cols] also does not work because mask is 2d
+            # Hence the below workaround with an intermediate copy.
+            temp_df = all_metric_results_df[pval_cols].copy()
+            temp_df.values[mask.values] = pvals_transformed
+            all_metric_results_df[pval_cols] = temp_df
+            assert all_metric_results_df[pval_cols].min(axis=None) == pvals_transformed.min()
+            assert all_metric_results_df[pval_cols].max(axis=None) == pvals_transformed.max()
 
             # Fill in the complement pvals we left empty (nan) so far.
             # It is important that this happens *after* multiple testing correction!
@@ -261,7 +271,6 @@ def compare_groups(df: pd.DataFrame,
     # ------------------------------------------------------- #
     ### C: GENERATE REPORT                                  ###
     # ------------------------------------------------------- #
-    start_time = time.time()
 
     if not plot_groups:
         plot_groups = select_extreme_tested_groups(
@@ -272,6 +281,7 @@ def compare_groups(df: pd.DataFrame,
 
     if report_file is not None:
         if report_file.endswith(".html"):
+            start_time = time.time()
             print(f"Report will be written to {report_file}.")
             generate_report_file(report_file_path=report_file, 
                                  df=df, 
@@ -279,10 +289,9 @@ def compare_groups(df: pd.DataFrame,
                                  plot_groups=plot_groups, 
                                  metrics=metrics, 
                                  threshold=threshold)
+            print(f"Time spent generating report file: {time.time() - start_time:.1f} seconds")
         else:
             raise ValueError("Unsupported file format. Use .html extension only.")
-             
-    print(f"Time spent generating report file: {time.time() - start_time:.1f} seconds")
 
     return all_metric_results_df, plot_groups
 

@@ -12,7 +12,7 @@ from meval.diags import metric_plot
 from meval.config import settings
 
 
-def test_integration():
+def test_multiauroc():
     test_df = pd.DataFrame({
         'y_pred_prob_0': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
         'y_pred_prob_1': [0.4, 0.1, 0.5, 0.1, 0.2, 0.1],
@@ -36,4 +36,4 @@ if __name__ == '__main__':
     __spec__ = None    
 
     settings.update(N_bootstrap=10, N_test_permut=10, max_N_student_bootstrap=10, parallel=False)
-    test_integration()
+    test_multiauroc()
