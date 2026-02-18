@@ -76,7 +76,11 @@ class GroupFilter(object):
                 elif v == "nan":
                     return np.nan
                 else:
-                    return np.array(v, dtype=col_types[k]).item()
+                    # for categorical columns, we need to use the categories dtype to correctly parse the value
+                    # since np does not know what to do with e.g.
+                    # 'CategoricalDtype(categories=['no', 'yes'], ordered=False, categories_dtype=object)'
+                    col_type = col_types[k].categories.dtype if hasattr(col_types[k], 'categories') else col_types[k]
+                    return np.array(v, dtype=col_type).item()
 
             attribute_dict = {
                 k: parse_val(k, v)
