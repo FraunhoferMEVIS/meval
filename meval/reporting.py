@@ -22,7 +22,9 @@ def generate_report_file(
         threshold: Optional[float] = None
         ) -> None:
 
-    metric_overview_fig = plot_metric_overview(metrics, all_metric_results_df, plot_groups, test_df=df, add_risk_plot=True, threshold=threshold)
+    metric_overview_fig = plot_metric_overview(metrics, all_metric_results_df, plot_groups, test_df=df,
+                                               add_risk_plot=any([colname in df.columns for colname in ComparisonMetric.y_pred_prob_cols]),
+                                               threshold=threshold)
     metric_overview_html = plot_to_html(metric_overview_fig)
 
     table_cm = sns.diverging_palette(145, 300, s=60, as_cmap=True)

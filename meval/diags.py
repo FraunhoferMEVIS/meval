@@ -1022,7 +1022,7 @@ def plot_metric_overview(
         plot_idx += 1
 
     if add_risk_plot:
-        assert test_df is not None
+        assert test_df is not None and any([colname in test_df.columns for colname in ComparisonMetric.y_pred_prob_cols])
         dfs = []
         for idx, group_name in enumerate(plot_groups):
             if group_name != 'group_med':
