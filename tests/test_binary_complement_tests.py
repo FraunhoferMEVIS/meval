@@ -27,7 +27,7 @@ def setup():
 
     group_by = ["a", "b", "c", "d"]
 
-    analysis_groups = [{}] + get_group_combinations(df, group_by, max_combinations=3)
+    analysis_groups = [{}] + get_group_combinations(df, group_by, max_combinations=3, min_subgroup_size=0)
     analysis_group_filters = [GroupFilter(group_attribute_dict) for group_attribute_dict in analysis_groups]    
 
     return df, metrics, group_by, analysis_group_filters

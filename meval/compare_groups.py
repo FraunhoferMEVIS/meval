@@ -109,6 +109,8 @@ def compare_groups(df: pd.DataFrame,
     if not analysis_groups:
         assert len(df) >= min_subgroup_size, "The entire dataset is smaller than the specified minimum subgroup size."
 
+        print("Determining groups for comparison...")
+
         if add_all_group:
             analysis_groups = [{}]  # 'all' group
         else:
@@ -127,19 +129,20 @@ def compare_groups(df: pd.DataFrame,
             
             if group_interactions is None or group_interactions == 0:
                 for attribute in group_by:
-                    analysis_groups = analysis_groups + [{attribute: v} for v in df[attribute].unique()]
+                    analysis_groups = analysis_groups + [{attribute: v} for v in df[attribute].unique() if GroupFilter({attribute: v})(df).sum() >= min_subgroup_size]
             elif isinstance(group_interactions, int):  # int analyze_subgroups specifies the maximum grouping variable combination depth
                 assert group_interactions < len(group_by)
-                analysis_groups = analysis_groups + get_group_combinations(df, group_by, group_interactions)
-                analysis_groups = [grp for grp in analysis_groups if GroupFilter(grp)(df).sum() >= min_subgroup_size]
+                analysis_groups = analysis_groups + get_group_combinations(df, group_by, group_interactions, min_subgroup_size=min_subgroup_size)
             else:
                 raise NotImplementedError
             
         analysis_group_filters = [GroupFilter(group_attribute_dict) for group_attribute_dict in analysis_groups]        
 
     else:
+        print("Using user-provided groups for comparison...")
         analysis_group_filters = [GroupFilter(group_repr_str=groupname, col_types=df.dtypes.to_dict()) for groupname in analysis_groups]
         
+    print(f"Analyzing {len(analysis_group_filters)} groups.")
 
     # ------------------------------------------------------- #
     ### B: COMPUTE METRICS OVER THE DETERMINED (SUB-)GROUPS ###
@@ -300,28 +303,48 @@ def compare_groups(df: pd.DataFrame,
 def get_group_combinations(
         df: pd.DataFrame, 
         group_vars: Sequence[str], 
-        max_combinations: int):
+        max_combinations: int,
+        min_subgroup_size: int
+    ) -> Sequence[dict]:
 
     assert max_combinations < len(group_vars)
 
-    # gather values for the different group vars, e.g. gender in [male, female]
+    # Gather values for the different group vars, e.g. gender in [male, female].
+    # This is just a list of lists, e.g. [[var1-val1, var1-val2], [var2-val1, var2-val2, var2-val3], ...]
+    # We filter out values that do not have enough samples (i.e., < min_subgroup_size) right here to avoid generating too many 
+    # combinations that will be filtered out later anyway.
     var_vals = []
     for var in group_vars:
-        var_vals.append(df[var].unique())
+        var_vals.append([val for val in df[var].unique() if GroupFilter({var: val})(df).sum() >= min_subgroup_size])
 
-    # get combinations of group vars, e.g. [gender, hospital, gender x hospital]
-    # technically, var_combinations is sth like [(0,), (1,), (2,), (0, 1), (0, 2), (1, 2)] where the ints specify the position in group_vars
+    # Get combinations of group vars, e.g. [gender, hospital, gender x hospital].
+    # Technically, var_combinations is sth like [(0,), (1,), (2,), (0, 1), (0, 2), (1, 2)] where the ints specify the position in group_vars.
     var_combinations = []
     for ii in range(max_combinations + 1):
         var_combinations = var_combinations + list(itertools.combinations(range(len(group_vars)), ii+1))
 
-    # now get the actual value combinations, e.g. [male, female, hospital A, hospital B, male x hospital A, male x hospital B, ...]
-    # technically, groups is a list like [{}, {'gender': 'male'}, {'hospital': 'A'}, {'gender:'male', 'hospital': 'A'}, ...]
+    # Now get the actual value combinations, e.g. [male, female, hospital A, hospital B, male x hospital A, male x hospital B, ...]
+    # Technically, groups is a list like [{}, {'gender': 'male'}, {'hospital': 'A'}, {'gender:'male', 'hospital': 'A'}, ...]
     groups = []
+
+    too_small_groups = []  # list of frozensets of (key, value) pairs known to be too small
+
     for var_combination in var_combinations:
         var_val_combinations = itertools.product(*[var_vals[idx] for idx in var_combination])
         for var_val_combination in var_val_combinations:
             # var_val_combination is a tuple like (0, 1) where var_val_combination[0] specifies the value taken by group_var[var_combination[0]]
-            groups.append({group_vars[var_combination[ii]]: var_val_combination[ii] for ii in range(len(var_combination))})
-            
+            grp = {group_vars[var_combination[ii]]: var_val_combination[ii] for ii in range(len(var_combination))}
+
+            # Skip if this group is a subset of any known-too-small group.
+            # This way, we are still iterating over all combinations, but we can skip the costly GroupFilter operation.
+            # (The any(...) check below should be cheaper than that.)
+            grp_items = frozenset(grp.items())
+            if any(small_grp.issubset(grp_items) for small_grp in too_small_groups):
+                continue
+            elif GroupFilter(grp)(df).sum() >= min_subgroup_size:
+                groups.append(grp)
+            elif len(grp.keys()) <= max_combinations:
+                # proactively filter out more complex combinations that would be filtered out later anyway to avoid combinatorial explosion of too many groups
+                too_small_groups.append(grp_items)
+
     return groups

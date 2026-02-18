@@ -19,13 +19,13 @@ def test_get_group_combinations():
         "b": ["x", "x", "y", "y"]
     })
 
-    a_groups = get_group_combinations(test_df, ["a"], 0)
+    a_groups = get_group_combinations(test_df, ["a"], 0, min_subgroup_size=0)
     assert unordered_lists_of_dicts_equal(a_groups, [{"a": v} for v in test_df["a"].unique()])
 
-    b_groups = get_group_combinations(test_df, ["b"], 0)
+    b_groups = get_group_combinations(test_df, ["b"], 0, min_subgroup_size=0)
     assert unordered_lists_of_dicts_equal(b_groups, [{"b": v} for v in test_df["b"].unique()])
 
-    ab_groups = get_group_combinations(test_df, ["a", "b"], 1)
+    ab_groups = get_group_combinations(test_df, ["a", "b"], 1, min_subgroup_size=0)
     assert unordered_lists_of_dicts_equal(ab_groups, [{"a": 0},
                               {"a": 1},
                               {"a": 2},
@@ -39,7 +39,7 @@ def test_get_group_combinations():
                               {"a": 2, "b": "y"}])
 
     with pytest.raises(AssertionError):
-        ab_groups = get_group_combinations(test_df, ["a", "b"], 2)
+        ab_groups = get_group_combinations(test_df, ["a", "b"], 2, min_subgroup_size=0)
 
 
 def test_get_group_combinations_with_NA():
@@ -51,13 +51,13 @@ def test_get_group_combinations_with_NA():
         "b": ["x", "x", np.nan, np.nan]
     })
 
-    a_groups = get_group_combinations(test_df, ["a"], 0)
+    a_groups = get_group_combinations(test_df, ["a"], 0, min_subgroup_size=0)
     assert unordered_lists_of_dicts_equal(a_groups, [{"a": v} for v in test_df["a"].unique()])
 
-    b_groups = get_group_combinations(test_df, ["b"], 0)
+    b_groups = get_group_combinations(test_df, ["b"], 0, min_subgroup_size=0)
     assert unordered_lists_of_dicts_equal(b_groups, [{"b": v} for v in test_df["b"].unique()])
 
-    ab_groups = get_group_combinations(test_df, ["a", "b"], 1)
+    ab_groups = get_group_combinations(test_df, ["a", "b"], 1, min_subgroup_size=0)
     assert unordered_lists_of_dicts_equal(ab_groups, [{"a": 0},
                                 {"a": 1},
                                 {"a": pd.NA},
@@ -71,7 +71,7 @@ def test_get_group_combinations_with_NA():
                                 {"a": pd.NA, "b": np.nan}])
 
     with pytest.raises(AssertionError):
-        ab_groups = get_group_combinations(test_df, ["a", "b"], 2)
+        ab_groups = get_group_combinations(test_df, ["a", "b"], 2, min_subgroup_size=0)
 
 
 if __name__ == '__main__':
