@@ -33,6 +33,12 @@ dependencies = [
 ]
 license-files = ["LICEN[CS]E*"]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-timeout"
+]
+
 [project.urls]
 Homepage = "https://github.com/FraunhoferMEVIS/meval"
 Issues = "https://github.com/FraunhoferMEVIS/meval/issues"
