@@ -14,7 +14,9 @@ def safe_np_isnan(arr_or_series):
     # for those, it simply returns False instead.
     # (It is also vectorized for efficiency.)
 
-    if pd.api.types.is_numeric_dtype(arr_or_series.dtype):
+    # The second condition catches nullable dtypes (e.g., Int64) that are numeric but not handled correctly by np.isnan:
+    # np.isnan(pd.NA) yields <NA> (by pd NA propagation) which we do not want (we want False).
+    if pd.api.types.is_numeric_dtype(arr_or_series.dtype) and not pd.api.types.is_extension_array_dtype(arr_or_series.dtype):
         return np.isnan(arr_or_series)
     else:
         out = np.full(len(arr_or_series), False, dtype=bool)
@@ -120,7 +122,7 @@ class GroupFilter(object):
                     raise ValueError("Unknown NaN/NA type found?")
                 
             else:
-                filter_series = filter_series & (df[k] == v)
+                filter_series = (filter_series & (df[k] == v)).fillna(False).astype(bool)
 
         if validate:
             pa.SeriesSchema(bool, nullable=False, unique=False).validate(filter_series)

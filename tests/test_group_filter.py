@@ -54,6 +54,22 @@ def test_calls_with_nans():
     assert GroupFilter({'b': np.nan})(df).sum() == 0
     assert GroupFilter({'b': pd.NA})(df).sum() == 1
 
+    # Test a case with nullable dtypes (not object as above) - these handle missing values differently, 
+    # so it's important to test both
+    df = pd.DataFrame({'a': [2, 3, np.nan], 'b': [4, 5, pd.NA]})
+    # this is still with df.dtypes == ('a': float64, 'b': object)
+    assert GroupFilter({'a': 2})(df).sum() == 1
+    assert GroupFilter({'a': np.nan})(df).sum() == 1
+    assert GroupFilter({'a': pd.NA})(df).sum() == 0
+    assert GroupFilter({'b': 4})(df).sum() == 1
+    assert GroupFilter({'b': np.nan})(df).sum() == 0
+    assert GroupFilter({'b': pd.NA})(df).sum() == 1    
+    # now with df.dtypes == ('a': float64, 'b': 'Int64') - note that the 'b' column is now a nullable integer type, not object
+    df = df.astype({'b': 'Int64'})
+    assert GroupFilter({'b': 4})(df).sum() == 1
+    assert GroupFilter({'b': np.nan})(df).sum() == 0
+    assert GroupFilter({'b': pd.NA})(df).sum() == 1  
+
     # Test that this also works in parallel (it did not before when I was using 'is pd.NA' and 'is np.nan')
     filters = [
         GroupFilter({'a': 2}),
@@ -68,6 +84,8 @@ def test_calls_with_nans():
     assert all(masks_lst[0] == [True, False, False])
     assert all(masks_lst[1] == [False, False, True])
     assert all(masks_lst[2] == [False, False, False])
+
+    
 
 
 def test_complement():

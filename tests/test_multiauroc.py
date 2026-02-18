@@ -26,6 +26,7 @@ def test_multiauroc():
         df=test_df,
         metrics=[MultiClassAUROC()],
         group_by="site",
+        min_subgroup_size=1
     )
 
     metric_plot(MultiClassAUROC(), all_metric_results_df)

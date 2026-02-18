@@ -89,7 +89,7 @@ def compare_groups(df: pd.DataFrame,
                    metrics: Sequence[ComparisonMetric], 
                    group_by: Optional[str | Sequence[str]] = None, 
                    group_interactions: None | int = None,
-                   min_subgroup_size: int = 20,
+                   min_subgroup_size: int = 20,  # ignored if analysis_groups are provided
                    report_file: Optional[str] = None, 
                    add_all_group: bool = True,
                    threshold: Optional[float] = None,
@@ -106,9 +106,9 @@ def compare_groups(df: pd.DataFrame,
     ### A: DETERMINE GROUPS FOR WHICH TO EVALUATE THE MODEL SEPARATELY ###
     # ------------------------------------------------------------------ #
 
-    assert len(df) >= min_subgroup_size, "The entire dataset is smaller than the specified minimum subgroup size."
-
     if not analysis_groups:
+        assert len(df) >= min_subgroup_size, "The entire dataset is smaller than the specified minimum subgroup size."
+
         if add_all_group:
             analysis_groups = [{}]  # 'all' group
         else:
