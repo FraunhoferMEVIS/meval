@@ -259,7 +259,8 @@ def bootstrap_pr_curve(
 
 def auroc(target: npt.NDArray[np.bool] | npt.NDArray[np.integer], 
           preds: npt.NDArray[np.floating], 
-          multiclass_mode: Literal["binary", "ovr", "ovo"] = "binary"
+          multiclass_mode: Literal["binary", "ovr", "ovo"] = "binary",
+          min_cases_per_class: int = 3
           ) -> float:
     """
     Compute AUROC for binary or multiclass classification.
@@ -268,21 +269,24 @@ def auroc(target: npt.NDArray[np.bool] | npt.NDArray[np.integer],
         target: True labels (binary or multiclass integers)
         preds: Predicted probabilities. For multiclass, should be shape (n_samples, n_classes)
         multiclass_mode: Either "ovr" (One-vs-Rest) or "ovo" (One-vs-One) for multiclass
+        min_cases_per_class: Minimum number of samples required per class. For binary, both
+            classes must meet this threshold. For OvR, at least two classes must meet it.
+            For OvO, all classes must meet it.
         
     Returns:
-        AUROC score, or np.nan if undefined
+        AUROC score, or np.nan if undefined / too few examples per class
     """
-    classes = np.unique(target)
+    classes, counts = np.unique(target, return_counts=True)
     n_classes = len(classes)
     
     if multiclass_mode == "binary":
         # Binary case: check for both positive and negative examples
-        if n_classes == 2:
+        if n_classes < 2 or np.any(counts < min_cases_per_class):
+            return np.nan
+        else:
             warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
             r = roc_auc_score(target, preds)
             warnings.filterwarnings("default", category=UndefinedMetricWarning)
-        else:
-            r = np.nan
     else:
         # Ensure preds is 2D with shape (n_samples, n_classes)
         assert preds.ndim == 2, f"For multiclass, preds must be 2D, got shape {preds.shape}"
@@ -290,7 +294,9 @@ def auroc(target: npt.NDArray[np.bool] | npt.NDArray[np.integer],
         assert preds.shape[1] >= max(n_classes, 2), f"Number of probability columns ({preds.shape[1]}) must be greater than or equal to the number of classes ({n_classes})"
 
         # Multiclass case: check that we have all classes present
-        if n_classes < preds.shape[1]:
+        if multiclass_mode == 'ovr' and np.sum(counts >= min_cases_per_class) < 2:
+            r = np.nan
+        elif multiclass_mode == 'ovo' and (n_classes < preds.shape[1] or np.any(counts < min_cases_per_class)):
             r = np.nan
         else:
             warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
@@ -305,7 +311,7 @@ def brier_scores(
         pred_probs: npt.NDArray[np.floating]
         ) -> tuple[float, float, float, float]:
     # this only works for the binary case. multi-category extensions exist, though.
-    assert len(np.unique(target) <= 2)
+    assert len(np.unique(target)) <= 2
     assert issubclass(target.dtype.type, np.integer) or issubclass(target.dtype.type, np.bool)
     assert np.issubdtype(pred_probs.dtype, np.floating)
     assert np.all(target.shape == pred_probs.shape)

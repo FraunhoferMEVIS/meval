@@ -8,7 +8,9 @@ from ..group_filter import GroupFilter
 
 class MultiClassAUROC(ComparisonMetric):
 
-    def __init__(self, test: bool = False, auroc_type: Literal['ovo', 'OvO', 'OVO', 'ovr', 'OvR', 'OVR'] = 'ovo'):
+    def __init__(self, test: bool = False, 
+                 auroc_type: Literal['ovo', 'OvO', 'OVO', 'ovr', 'OvR', 'OVR'] = 'ovo',
+                 min_samples_per_class: int = 3):
         # Default to OvO (instead of OvR) because that is better comparable between subgroups with differing label distributions.
         assert auroc_type in ["ovo", "ovr"]
         super().__init__(
@@ -20,6 +22,7 @@ class MultiClassAUROC(ComparisonMetric):
             test=test
         )
         self.multiclass_mode: Literal['ovo', 'ovr'] = cast(Literal['ovo', 'ovr'], auroc_type.lower())
+        self.min_samples_per_class: int = min_samples_per_class
 
     def __call__(
         self, 
@@ -32,4 +35,5 @@ class MultiClassAUROC(ComparisonMetric):
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
         y_true = self.get_multiclass_y_true(df, mask=mask, validate=validate)
         y_pred_prob = self.get_multiclass_y_pred_prob(df, mask=mask, validate=validate)
-        return auroc(y_true.to_numpy(), y_pred_prob.to_numpy(), multiclass_mode=self.multiclass_mode)
+        return auroc(y_true.to_numpy(), y_pred_prob.to_numpy(), 
+                     multiclass_mode=self.multiclass_mode, min_cases_per_class=self.min_samples_per_class)
