@@ -2,7 +2,7 @@ import itertools
 import time
 import warnings
 from multiprocessing import Pool, cpu_count
-from typing import Optional, Sequence
+from typing import Collection, Optional, Sequence
 import signal
 import sys
 
@@ -22,7 +22,7 @@ from .reporting import generate_report_file
 def calc_metric(df: pd.DataFrame, 
                 metric: ComparisonMetric, 
                 group_filter: GroupFilter, 
-                test_groups: Optional[Sequence[str]] = None,
+                test_groups: Optional[Collection[str]] = None,
                 ) -> pd.DataFrame:
 
     with warnings.catch_warnings():
@@ -87,14 +87,14 @@ def initialize_pool(settings_dict):
 
 def compare_groups(df: pd.DataFrame, 
                    metrics: Sequence[ComparisonMetric], 
-                   group_by: Optional[str | Sequence[str]] = None, 
+                   group_by: Optional[str | Collection[str]] = None, 
                    group_interactions: None | int = None,
                    min_subgroup_size: int = 20,  # ignored if analysis_groups are provided
                    report_file: Optional[str] = None, 
                    add_all_group: bool = True,
                    threshold: Optional[float] = None,
                    max_plot_groups: int = 12,
-                   analysis_groups: Optional[Sequence[str]] = None,
+                   analysis_groups: Optional[Collection[str]] = None,
                    plot_groups: Optional[Sequence[str]] = None,
                    test_correction_method: str = "fdr_bh"  # assumes non-negatively related tests
                    ) -> tuple[pd.DataFrame, list[str]]:
@@ -123,6 +123,11 @@ def compare_groups(df: pd.DataFrame,
             # Are subgroups determined by the intersection of multiple attributes to be considered, and if yes, how/which?
             if isinstance(group_by, str):
                 group_by = [group_by]
+
+            assert isinstance(group_by, Collection)
+            
+            if not isinstance(group_by, Sequence):
+                group_by = list(group_by)
 
             for attr in group_by:
                 assert len(df[attr].unique()) > 1, "Requested grouping/stratifying by a variable which only takes on a single value."
@@ -164,6 +169,8 @@ def compare_groups(df: pd.DataFrame,
         # We here define the complement as attaining different values in *all* group-defining attributes. (Cf. group_filter.py.)
         # I.e. the complement of "male and old" is "non-male *and* non-old". 
         # So one group being the exact complement of another can happen only when all group-defining attributes are binary.
+        # (As a counterexample, consider the case of 3 groups A, B, C. The complement of each is the union of the other two, 
+        #  so there are no exact complements.)
         # (Even in that case, it does not *have* to happen because one of the two complementary groups could be too small.)
 
         test_groups, test_group_complements = find_binary_complements(df, group_by, analysis_group_filters)
@@ -308,6 +315,7 @@ def get_group_combinations(
     ) -> Sequence[dict]:
 
     assert max_combinations < len(group_vars)
+    assert isinstance(group_vars, Sequence) and all(isinstance(var, str) for var in group_vars)
 
     # Gather values for the different group vars, e.g. gender in [male, female].
     # This is just a list of lists, e.g. [[var1-val1, var1-val2], [var2-val1, var2-val2, var2-val3], ...]

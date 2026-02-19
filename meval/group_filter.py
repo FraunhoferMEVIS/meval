@@ -7,21 +7,38 @@ import pandera.pandas as pa
 
 numtypes = [int, float, np.floating, np.integer]
 
-def safe_np_isnan(arr_or_series):
+
+def safe_np_isnan(val_or_arr_or_series):
     # 1) pd.isna is True for both pd.NA and np.nan, but I want to distinguish between the two
     # 2) np.isnan throws errors for non-numeric series entries
     # This is essentially np.isnan except that it does not throw an error for non-numeric dtypes - 
     # for those, it simply returns False instead.
     # (It is also vectorized for efficiency.)
 
+    assert val_or_arr_or_series is not None, "Unexpected None value found, expected a scalar or array/series."
+
+    # --- scalar path ---
+    # Why np.ndim(val) == 0 instead of np.isscalar? np.isscalar(pd.NA) returns False, which would misroute it. 
+    # np.ndim returns 0 for all plain Python scalars, numpy scalars, pd.NA, None, etc., so it's a cleaner scalar gate.
+    if np.ndim(val_or_arr_or_series) == 0:
+        # Exclude pd.NA and pd.NaT early - they are not np.nan
+        if isinstance(val_or_arr_or_series, type(pd.NA)) or isinstance(val_or_arr_or_series, type(pd.NaT)):
+            return False
+        # Only attempt isnan for numeric types
+        if isinstance(val_or_arr_or_series, tuple(numtypes)):
+            return bool(np.isnan(val_or_arr_or_series))
+        return False
+
+    # --- array/series path ---    
+
     # The second condition catches nullable dtypes (e.g., Int64) that are numeric but not handled correctly by np.isnan:
     # np.isnan(pd.NA) yields <NA> (by pd NA propagation) which we do not want (we want False).
-    if pd.api.types.is_numeric_dtype(arr_or_series.dtype) and not pd.api.types.is_extension_array_dtype(arr_or_series.dtype):
-        return np.isnan(arr_or_series)
+    if pd.api.types.is_numeric_dtype(val_or_arr_or_series.dtype) and not pd.api.types.is_extension_array_dtype(val_or_arr_or_series.dtype):
+        return np.isnan(val_or_arr_or_series)
     else:
-        out = np.full(len(arr_or_series), False, dtype=bool)
-        isnumeric = np.array([any([np.issubdtype(type(x), numtype) for numtype in numtypes]) for x in arr_or_series.values])
-        out[isnumeric] = np.isnan(pd.to_numeric(arr_or_series[isnumeric], errors='raise'))
+        out = np.full(len(val_or_arr_or_series), False, dtype=bool)
+        isnumeric = np.array([any([np.issubdtype(type(x), numtype) for numtype in numtypes]) for x in val_or_arr_or_series.values])
+        out[isnumeric] = np.isnan(pd.to_numeric(val_or_arr_or_series[isnumeric], errors='raise'))
         return out
 
 
@@ -104,6 +121,7 @@ class GroupFilter(object):
             # np.isnan(pd.NA) yields <NA> (by pd NA propagation) and thus raises an error in the if clause above, 
             # as intended.
             # Verify this is really pd.NA and not something else that I don't know about.
+            # isinstance(v, type(pd.NA)) should also work, not sure which is better
             if type(v).__name__ == "NAType":
                 nantype = "pd_NA"
             else:
@@ -158,7 +176,7 @@ class GroupFilter(object):
                         raise ValueError("Unknown NaN/NA type found?")                 
                        
                 else:                
-                    filter_series = filter_series & (df[k] != v)
+                    filter_series = (filter_series & (df[k] != v)).fillna(False).astype(bool)
 
         pa.SeriesSchema(bool, nullable=False, unique=False).validate(filter_series)
 
@@ -185,7 +203,21 @@ def find_binary_complements(df, group_by, analysis_group_filters):
     def binary_complement(group_filter):
         complement_attr_dict = {}
         for attr, val in group_filter.group_attributes.items():
-            complement_attr_dict[attr] = [other_val for other_val in df[attr].unique() if not val == other_val].pop()
+            if pd.isna(val):
+                nantype = GroupFilter.get_nan_type(val)
+
+                if nantype == "np_nan":
+                    other_vals = [other_val for other_val in df[attr].unique() if not safe_np_isnan(other_val)]
+                elif nantype == "pd_NA":
+                    other_vals = [other_val for other_val in df[attr].unique() if not (pd.isna(other_val) & ~safe_np_isnan(other_val))]
+                else:
+                    raise ValueError("Unknown NaN/NA type found?")                 
+                    
+            else:                
+                other_vals = [other_val for other_val in df[attr].unique() if not val == other_val]
+
+            assert len(other_vals) == 1, "Expected binary attribute but found more than 2 unique values."
+            complement_attr_dict[attr] = other_vals.pop()
 
         complement_filter = GroupFilter(complement_attr_dict)
         assert all(group_filter.complement(df) == complement_filter(df))
