@@ -13,6 +13,7 @@ class ComparisonMetric(ABC):
     y_true_cols = ['y_true', 'label', 'y', 'target']
     y_pred_prob_cols = ['y_pred_prob', 'y_prob']
     y_pred_cols = ['y_pred'] + y_pred_prob_cols
+    y_float_pred_cols = ['y_pred']
     
     # multiclass case: we don't know how many classes there are; check for the right format of at least class 0
     y_pred_prob_cols_mc = ['y_pred_prob_0', 'y_prob_0']
@@ -50,6 +51,22 @@ class ComparisonMetric(ABC):
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
         raise NotImplementedError
     
+    @staticmethod
+    def _get_group_mask(
+            df: pd.DataFrame, 
+            group_filter: Optional[GroupFilter] = None, 
+            mask: Optional[pd.Series] = None,
+            validate: bool = True
+            ) -> pd.Series:
+
+        if mask is None:
+            if group_filter is None:
+                mask = pd.Series([True] * len(df.index), index=df.index)
+            else:
+                mask = group_filter(df, validate=validate)
+
+        return mask
+
     def get_group_mask(
             self, 
             df: pd.DataFrame, 
@@ -64,11 +81,26 @@ class ComparisonMetric(ABC):
                 else:
                     assert req_col in df.columns, f"Expected {req_col} in df.columns."
 
-        if group_mask is None:
-            assert group_filter is not None
-            group_mask = group_filter(df, validate=validate)
-        
-        return group_mask
+        return ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=group_mask, validate=validate)
+    
+    @staticmethod
+    def get_y_true(
+        df: pd.DataFrame, 
+        group_filter: Optional[GroupFilter] = None, 
+        mask: Optional[pd.Series] = None,
+        validate: bool = True
+        ) -> pd.Series:
+
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
+
+        for colname in ComparisonMetric.y_true_cols:
+            if colname in df.columns:
+                y_true = df[colname][mask]
+                break
+        else:
+            raise RuntimeError(f"Found no label column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_true_cols}.")
+
+        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
 
     @staticmethod
     def get_binary_y_true(
@@ -78,24 +110,28 @@ class ComparisonMetric(ABC):
         validate: bool = True
         ) -> pd.Series:
 
-        if mask is None:
-            if group_filter is None:
-                mask = pd.Series([True] * len(df.index), index=df.index)
-            else:
-                mask = group_filter(df, validate=validate)
-
-        for colname in ComparisonMetric.y_true_cols:
-            if colname in df.columns:
-                y_true = df[colname][mask]
-                break
-        else:
-            raise RuntimeError(f"Found no label column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_true_cols}.")
-
+        y_true = ComparisonMetric.get_y_true(df, group_filter=group_filter, mask=mask, validate=validate)
+        
         if validate:
             pa.SeriesSchema(bool, nullable=False, unique=False).validate(y_true)
 
         return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
     
+    @staticmethod
+    def get_float_y_true(
+        df: pd.DataFrame, 
+        group_filter: Optional[GroupFilter] = None, 
+        mask: Optional[pd.Series] = None,
+        validate: bool = True
+        ) -> pd.Series:
+
+        y_true = ComparisonMetric.get_y_true(df, group_filter=group_filter, mask=mask, validate=validate)
+
+        if validate:
+            pa.SeriesSchema(float, nullable=False, unique=False).validate(y_true)
+
+        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
+
     @staticmethod
     def get_multiclass_y_true(
         df: pd.DataFrame, 
@@ -104,23 +140,12 @@ class ComparisonMetric(ABC):
         validate: bool = True
         ) -> pd.Series:
 
-        if mask is None:
-            if group_filter is None:
-                mask = pd.Series([True] * len(df.index), index=df.index)
-            else:
-                mask = group_filter(df, validate=validate)
-
-        for colname in ComparisonMetric.y_true_cols:
-            if colname in df.columns:
-                y_true = df[colname][mask]
-                break
-        else:
-            raise RuntimeError(f"Found no label column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_true_cols}.")
+        y_true = ComparisonMetric.get_y_true(df, group_filter=group_filter, mask=mask, validate=validate)
 
         if validate:
             pa.SeriesSchema(int, nullable=False, unique=False).validate(y_true)
 
-        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be an int series
+        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
 
     @staticmethod
     def get_binary_y_pred_prob(
@@ -130,11 +155,7 @@ class ComparisonMetric(ABC):
         validate: bool = True
         ) -> pd.Series:
 
-        if mask is None:
-            if group_filter is None:
-                mask = pd.Series([True] * len(df.index), index=df.index)
-            else:
-                mask = group_filter(df, validate=validate)
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
 
         for colname in ComparisonMetric.y_pred_prob_cols:
             if colname in df.columns:
@@ -161,11 +182,7 @@ class ComparisonMetric(ABC):
         validate: bool = True
         ) -> pd.DataFrame:
 
-        if mask is None:
-            if group_filter is None:
-                mask = pd.Series([True] * len(df.index), index=df.index)
-            else:
-                mask = group_filter(df, validate=validate)
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
 
         # Find all y_pred_prob columns (format: y_pred_prob_{cls_id})
         y_pred_prob_cols = [col for col in df.columns if col.startswith("y_pred_prob_")]
@@ -212,11 +229,7 @@ class ComparisonMetric(ABC):
             validate: bool = True,
             ) -> pd.Series:
 
-        if mask is None:
-            if group_filter is None:
-                mask = pd.Series([True] * len(df.index), index=df.index)
-            else:
-                mask = group_filter(df, validate=validate)
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
 
         if 'y_pred' in df.columns:
             y_pred = df['y_pred'][mask]
@@ -233,6 +246,28 @@ class ComparisonMetric(ABC):
 
         return y_pred  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
     
+    @staticmethod
+    def get_float_y_pred(
+        df: pd.DataFrame, 
+        group_filter: Optional[GroupFilter] = None,
+        mask: Optional[pd.Series] = None,
+        validate: bool = True
+        ) -> pd.Series:
+
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
+
+        for colname in ComparisonMetric.y_float_pred_cols:
+            if colname in df.columns:
+                y_pred = df[colname][mask]
+                break
+        else:
+            raise RuntimeError(f"Found no y_pred column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_float_pred_cols}.")
+
+        if validate:
+            pa.SeriesSchema(float, nullable=False, unique=False).validate(y_pred)
+
+        return y_pred  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
+
     def __repr__(self) -> str:
         return self.metric_name
     

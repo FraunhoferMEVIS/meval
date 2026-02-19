@@ -19,7 +19,6 @@ class BrierScore(ComparisonMetric):
         )
         self.balanced = balanced
 
-
     def __call__(
         self, 
         df: pd.DataFrame, 

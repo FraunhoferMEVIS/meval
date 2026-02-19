@@ -5,6 +5,7 @@ from .AUROC import AUROC
 from .BrierScore import BrierScore
 from .Count import Count
 from .DRMSCE import DRMSCE
+from .MAE import MAE
 from .MultiClassAUROC import MultiClassAUROC
 from .Precision import Precision
 from .ProportionOfPos import ProportionOfPos
@@ -22,6 +23,7 @@ __all__ = [
     "BrierScore",
     "Count",
     "DRMSCE",
+    "MAE",
     "MultiClassAUROC",
     "Precision",
     "ProportionOfPos",
