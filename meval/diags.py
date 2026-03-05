@@ -51,8 +51,8 @@ default_layout_with_title = default_layout | {
 def process_export_file(
         fig: go.Figure, 
         export_file: str, 
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),         
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None, 
         dpi = 600
         ) -> None:
     
@@ -101,8 +101,8 @@ def process_export_file(
 
 def validate_plot_args(
         export_fig_path: Optional[str], 
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),
+        export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> None:
     
     if export_fig_path is not None and export_fig_path.endswith(".html"):
@@ -119,7 +119,7 @@ def metric_plot(
         sort_groups_by_metric: bool = True,
         figure: bool = True,
         export_fig_path: Optional[str] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
         return_group_color_dict: bool = False
         ) -> go.Figure | list[BaseTraceType] | tuple[go.Figure | list[BaseTraceType], dict]:
@@ -299,7 +299,7 @@ def rel_diag(
         legend: bool = True, 
         threshold: Optional[float] = None,
         export_fig_path: Optional[str] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
         log_density: bool = True
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
@@ -582,7 +582,7 @@ def roc_diag(
         legend: bool = True,
         threshold: Optional[float] = None,
         export_fig_path: Optional[str] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
 
@@ -663,7 +663,7 @@ def pr_diag(
         legend: bool = True,
         threshold: Optional[float] = None,
         export_fig_path: Optional[str] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
     
@@ -800,8 +800,8 @@ def prg_diag(
         threshold: Optional[float] = None,
         rec_gain_min: float = 0,
         export_fig_path: Optional[str] = None,
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),   
+        export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
     
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
@@ -895,7 +895,7 @@ def plot_metric_overview(
         test_df: Optional[pd.DataFrame] = None, 
         add_risk_plot: bool = False,
         export_fig_path: Optional[str] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None, 
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7), 
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None, 
         log_density: bool = True,
         threshold: Optional[float] = None
@@ -1109,7 +1109,7 @@ def volcano_plot(
         fig_title: Optional[str] = None,
         figure: bool = True,
         export_fig_path: Optional[str] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
+        export_fig_size_cm: Optional[tuple[float | int, float | int]] = (10, 7),
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> go.Figure | list[BaseTraceType]:
 
