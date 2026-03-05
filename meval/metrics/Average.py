@@ -27,4 +27,4 @@ class Average(ComparisonMetric):
         ) -> float:
         
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
-        return df[self.metric_col][mask].nanmean()
+        return df[self.metric_col][mask].mean()
