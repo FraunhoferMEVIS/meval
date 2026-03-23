@@ -1,10 +1,10 @@
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 from typing import Optional
 from collections.abc import Callable
 import scipy
 
+from ._array_types import FloatArray, LabelArray, NumericArray
 from .config import settings
 from .group_filter import GroupFilter
 from .metrics.ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar
@@ -38,7 +38,7 @@ def variance_of_proportion(numerator: int, denominator: int) -> float:
 
 
 def decide_stratify(
-        y_true: pd.Series | npt.NDArray[np.bool] | npt.NDArray[np.integer], 
+    y_true: pd.Series | LabelArray,
         threshold: int = 10
         ) -> tuple[bool, dict[int, int]]:
     """
@@ -83,8 +83,11 @@ def bootstrap_metric(
             stratify, class_counts = decide_stratify(y_true)
         else:
             stratify = False
+            class_counts = {}
+            y_true = None
 
         if stratify:
+            assert y_true is not None
             # Stratified sampling: sample from each class separately
             bs_idces_by_class = []
             for cls, count in class_counts.items():
@@ -364,6 +367,7 @@ def studentized_permut_pval(
 
     # two-sided pval; NaNs are handled by nan_mean
     pval = nan_mean(np.abs(S_permut) >= np.abs(S_base), nan_fraction_allowed=0.5)
+    pval = float(pval)
 
     if correct_zero_pvals:
         # We cannot find pvals < 1/n_valid_permut, ever.
@@ -382,12 +386,12 @@ def studentized_permut_pval(
 
 
 def bootstrap_curve(
-        target: npt.NDArray[np.bool] | npt.NDArray[np.integer], 
-        pred_probs: npt.NDArray[np.floating], 
-        curve_fun: Callable[..., np.ndarray], 
+    target: LabelArray,
+    pred_probs: FloatArray,
+    curve_fun: Callable[..., FloatArray],
         num_bootstraps: int, 
         num_samples: int
-        ) -> np.ndarray:
+    ) -> FloatArray:
 
     if len(np.unique(target)) >= 3:
         raise NotImplementedError("bootstrap_curve called with multiclass target but only implemented for the binary case.")
@@ -420,25 +424,26 @@ def bootstrap_curve(
 
 
 def ci_nan_quantile(
-        a: npt.NDArray, 
-        q: float | npt.NDArray[np.floating], 
+    a: NumericArray,
+    q: float | FloatArray,
         axis: Optional[int] = None, 
         nan_fraction_allowed: float = 0.1
-        ) -> float | npt.NDArray[np.floating]:
-    assert np.sum(np.isinf(a[:])) == 0
+    ) -> float | FloatArray:
+    a_float = np.asarray(a, dtype=float)
+    assert np.sum(np.isinf(a_float[:])) == 0
 
     if axis is None:
-        too_many_nan = np.sum(np.isnan(a[:])) > nan_fraction_allowed * len(a[:])
-        return np.nan if too_many_nan else np.nanquantile(a, q, axis=None)
+        too_many_nan = np.sum(np.isnan(a_float[:])) > nan_fraction_allowed * len(a_float[:])
+        return np.nan if too_many_nan else np.nanquantile(a_float, q, axis=None)
     
     else:
-        too_many_nan = np.sum(np.isnan(a), axis=axis) > nan_fraction_allowed * a.shape[axis]
+        too_many_nan = np.sum(np.isnan(a_float), axis=axis) > nan_fraction_allowed * a_float.shape[axis]
         quantile = np.ones_like(too_many_nan, dtype=np.float64)
         quantile[too_many_nan] = np.nan
-        if axis == 0 and np.ndim(a) == 2:
-            quantile[~too_many_nan] = np.nanquantile(a[:, ~too_many_nan], q, axis=axis)
-        elif axis == 1 and np.ndim(a) == 2:
-            quantile[~too_many_nan] = np.nanquantile(a[~too_many_nan, :], q, axis=axis)
+        if axis == 0 and np.ndim(a_float) == 2:
+            quantile[~too_many_nan] = np.nanquantile(a_float[:, ~too_many_nan], q, axis=axis)
+        elif axis == 1 and np.ndim(a_float) == 2:
+            quantile[~too_many_nan] = np.nanquantile(a_float[~too_many_nan, :], q, axis=axis)
         else:
             raise NotImplementedError
         
@@ -446,31 +451,32 @@ def ci_nan_quantile(
 
 
 def nan_mean(
-        a: npt.NDArray,
+    a: NumericArray,
         axis: Optional[int] = None, 
         nan_fraction_allowed: float = 0.1
-        ) -> float | npt.NDArray[np.floating]:
-    assert np.sum(np.isinf(a[:])) == 0
+    ) -> float | FloatArray:
+    a_float = np.asarray(a, dtype=float)
+    assert np.sum(np.isinf(a_float[:])) == 0
 
     if axis is None:
-        too_many_nan = np.sum(np.isnan(a[:])) > nan_fraction_allowed * len(a[:])
-        return np.nan if too_many_nan else np.nanmean(a, axis=None) # type: ignore
+        too_many_nan = np.sum(np.isnan(a_float[:])) > nan_fraction_allowed * len(a_float[:])
+        return np.nan if too_many_nan else np.nanmean(a_float, axis=None) # type: ignore
     
     else:
-        too_many_nan = np.sum(np.isnan(a), axis=axis) > nan_fraction_allowed * a.shape[axis]
+        too_many_nan = np.sum(np.isnan(a_float), axis=axis) > nan_fraction_allowed * a_float.shape[axis]
         mean = np.ones_like(too_many_nan, dtype=np.float64)
         mean[too_many_nan] = np.nan
-        if axis == 0 and np.ndim(a) == 2:
-            mean[~too_many_nan] = np.nanmean(a[:, ~too_many_nan], axis=axis)
-        elif axis == 1 and np.ndim(a) == 2:
-            mean[~too_many_nan] = np.nanmean(a[~too_many_nan, :], axis=axis)
+        if axis == 0 and np.ndim(a_float) == 2:
+            mean[~too_many_nan] = np.nanmean(a_float[:, ~too_many_nan], axis=axis)
+        elif axis == 1 and np.ndim(a_float) == 2:
+            mean[~too_many_nan] = np.nanmean(a_float[~too_many_nan, :], axis=axis)
         else:
             raise NotImplementedError
         
         return mean
     
 
-def hanley_var(auroc: float, y_true: pd.Series | np.ndarray):
+def hanley_var(auroc: float, y_true: pd.Series | LabelArray):
     nx = np.sum(y_true == 1)
     ny = np.sum(y_true == 0)
     assert nx+ny == len(y_true)
@@ -479,7 +485,7 @@ def hanley_var(auroc: float, y_true: pd.Series | np.ndarray):
     return var
 
 
-def newcombe_auroc_ci(auroc_val: float, y_true: pd.Series | np.ndarray, ci_alpha: float):  # this wants a 'small' ci_alpha, i.e. 0.05 (and not 0.95)
+def newcombe_auroc_ci(auroc_val: float, y_true: pd.Series | LabelArray, ci_alpha: float):  # this wants a 'small' ci_alpha, i.e. 0.05 (and not 0.95)
     assert isinstance(y_true, pd.Series) or isinstance(y_true, np.ndarray)
     z = scipy.stats.norm(loc=0, scale=1).ppf(1-ci_alpha/2)
     if auroc_val - 1e-4 > 0.0:

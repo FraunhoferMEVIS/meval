@@ -1,13 +1,9 @@
 from itertools import combinations
-from typing import Any, Optional, Sequence, TypeAlias, Union
+from typing import Optional, Sequence, Union
 
 import numpy as np
-import numpy.typing as npt
 
-
-LabelArray: TypeAlias = npt.NDArray[np.bool_] | npt.NDArray[np.integer[Any]]
-ScoreArray: TypeAlias = npt.NDArray[np.floating[Any]]
-InternalLabelArray: TypeAlias = npt.NDArray[np.bool_ | np.integer[Any]]
+from .._array_types import FloatArray, LabelArray, MixedLabelArray
 
 try:
     import numba
@@ -15,14 +11,14 @@ except ImportError:  # pragma: no cover
     numba = None
 
 
-def _as_binary(y_true: LabelArray) -> ScoreArray:
+def _as_binary(y_true: LabelArray) -> FloatArray:
     return (np.asarray(y_true) == 1).astype(float)
 
 
 def fast_auc(
     y_true: LabelArray,
-    y_score: ScoreArray,
-    sample_weight: Optional[ScoreArray] = None,
+    y_score: FloatArray,
+    sample_weight: Optional[FloatArray] = None,
 ) -> Union[float, str]:
     y_true_bin = _as_binary(y_true)
     y_score_arr = np.asarray(y_score, dtype=float)
@@ -75,8 +71,8 @@ if numba is not None:
 
     @numba.njit
     def _fast_numba_auc_nonw(
-        y_true: InternalLabelArray,
-        y_score: ScoreArray,
+        y_true: MixedLabelArray,
+        y_score: FloatArray,
     ) -> float:
         y_true = (y_true == 1)
 
@@ -101,9 +97,9 @@ if numba is not None:
 
     @numba.njit
     def _fast_numba_auc_w(
-        y_true: InternalLabelArray,
-        y_score: ScoreArray,
-        sample_weight: ScoreArray,
+        y_true: MixedLabelArray,
+        y_score: FloatArray,
+        sample_weight: FloatArray,
     ) -> float:
         y_true = (y_true == 1)
 
@@ -132,24 +128,24 @@ else:
 
 
     def _fast_numba_auc_nonw(  # pragma: no cover
-        y_true: InternalLabelArray,
-        y_score: ScoreArray,
+        y_true: MixedLabelArray,
+        y_score: FloatArray,
     ) -> float:
         raise RuntimeError("numba is not available")
 
 
     def _fast_numba_auc_w(  # pragma: no cover
-        y_true: InternalLabelArray,
-        y_score: ScoreArray,
-        sample_weight: ScoreArray,
+        y_true: MixedLabelArray,
+        y_score: FloatArray,
+        sample_weight: FloatArray,
     ) -> float:
         raise RuntimeError("numba is not available")
 
 
 def fast_numba_auc(
     y_true: LabelArray,
-    y_score: ScoreArray,
-    sample_weight: Optional[ScoreArray] = None,
+    y_score: FloatArray,
+    sample_weight: Optional[FloatArray] = None,
 ) -> float:
     if numba is None:
         result = fast_auc(y_true=y_true, y_score=y_score, sample_weight=sample_weight)
@@ -179,7 +175,7 @@ def fast_numba_auc(
 
 def fast_ovo_auc(
     y_true: LabelArray,
-    y_score: ScoreArray,
+    y_score: FloatArray,
     labels: Optional[Sequence] = None,
 ) -> float:
     y_true_arr = np.asarray(y_true)
@@ -222,7 +218,7 @@ def fast_ovo_auc(
 
 def fast_ovo_auc_numba(
     y_true: LabelArray,
-    y_score: ScoreArray,
+    y_score: FloatArray,
     labels: Optional[Sequence] = None,
 ) -> float:
     y_true_arr = np.asarray(y_true)

@@ -1,16 +1,16 @@
 import warnings
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 from sklearn.exceptions import UndefinedMetricWarning
 from sklearn.metrics import precision_recall_curve, roc_auc_score, roc_curve
 from typing import Optional, Literal
 
+from .._array_types import BoolArray, FloatArray, LabelArray
 from ..config import settings
 from ..stats import bootstrap_curve
 
 
-def get_confusion_matrix(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None) -> tuple[int, int, int, int]:
+def get_confusion_matrix(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> tuple[int, int, int, int]:
 
     if target.ndim == 1:
         target = target.reshape(1, -1)
@@ -44,14 +44,14 @@ def _ratio(numerator, denominator):
         return numerator / denominator
 
 
-def accuracy(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None) -> float:
+def accuracy(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> float:
     N = len(preds)
     TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP + TN, N)
 
 
-def recall(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None) -> float:
+def recall(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> float:
     TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP, TP + FN)
@@ -59,33 +59,33 @@ def recall(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = N
 sensitivity = recall
 TPR = recall
 
-def precision(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None) -> float:
+def precision(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> float:
     TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP, TP + FP)
 
 PPV = precision
 
-def f1_score(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None) -> float:
+def f1_score(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> float:
     # harmonic mean of precision and recall
     TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP, TP + 0.5 * (FP+FN))
 
 
-def specificity(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None) -> float:
+def specificity(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> float:
     TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TN, TN + FP)
 
 TNR = specificity
 
-def FPR(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None) -> float:
+def FPR(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> float:
 
     return 1 - specificity(target, preds, threshold=threshold)
 
 
-def selection_rate(target: np.ndarray, preds: np.ndarray, threshold: Optional[float] = None):
+def selection_rate(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None):
     N = len(preds)
     TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
@@ -99,10 +99,10 @@ def check_bootstrap_curve_args(target, pred_probs):
 
 
 def bootstrap_roc_curve(
-    target: npt.NDArray[np.bool],
-    pred_probs: npt.NDArray[np.floating],
+    target: BoolArray,
+    pred_probs: FloatArray,
     num_bootstraps: int,
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+) -> tuple[FloatArray, FloatArray, FloatArray]:
     
     check_bootstrap_curve_args(target, pred_probs)
     
@@ -133,10 +133,10 @@ def bootstrap_roc_curve(
 
 
 def bootstrap_prg_curve(
-        target: npt.NDArray[np.bool], 
-        pred_probs: npt.NDArray[np.floating], 
+    target: BoolArray,
+    pred_probs: FloatArray,
         num_bootstraps: int
-        ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
     check_bootstrap_curve_args(target, pred_probs)
 
     N_predictions = len(target)
@@ -213,10 +213,10 @@ def interpolate_pr(
 
 
 def bootstrap_pr_curve(
-        target: npt.NDArray[np.bool], 
-        pred_probs: npt.NDArray[np.floating], 
+    target: BoolArray,
+    pred_probs: FloatArray,
         num_bootstraps: int
-        ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
     
     check_bootstrap_curve_args(target, pred_probs)
     N_predictions = len(target)
@@ -257,8 +257,8 @@ def bootstrap_pr_curve(
         return recall, precision, precision_bs
 
 
-def auroc(target: npt.NDArray[np.bool] | npt.NDArray[np.integer], 
-          preds: npt.NDArray[np.floating], 
+def auroc(target: LabelArray,
+          preds: FloatArray,
           multiclass_mode: Literal["binary", "ovr", "ovo"] = "binary",
           min_cases_per_class: int = 3
           ) -> float:
@@ -307,8 +307,8 @@ def auroc(target: npt.NDArray[np.bool] | npt.NDArray[np.integer],
 
 
 def brier_scores(
-        target: npt.NDArray[np.bool | np.integer], 
-        pred_probs: npt.NDArray[np.floating]
+    target: LabelArray,
+    pred_probs: FloatArray
         ) -> tuple[float, float, float, float]:
     # this only works for the binary case. multi-category extensions exist, though.
     assert len(np.unique(target)) <= 2

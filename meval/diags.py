@@ -2,7 +2,6 @@ from collections.abc import Callable
 from typing import Optional, Sequence
 import math
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 import plotly.colors as pc
 import plotly.figure_factory as ff
@@ -13,6 +12,7 @@ from plotly.subplots import make_subplots
 import kaleido
 from warnings import warn
 
+from ._array_types import BoolArray, FloatArray
 from .config import settings
 from .group_filter import GroupFilter
 from .metrics._calibration import loess_calibration
@@ -490,7 +490,7 @@ def rel_diag(
 
 def curve_diag(
         test_df: pd.DataFrame, 
-        bootstrap_curve_fun: Callable[[npt.NDArray[np.bool], npt.NDArray[np.floating], int], tuple[np.ndarray, np.ndarray, np.ndarray]], 
+    bootstrap_curve_fun: Callable[[BoolArray, FloatArray, int], tuple[FloatArray, FloatArray, FloatArray]],
         plot_groups: Optional[Sequence[str]] = None, 
         group_color_dict: Optional[dict[str, str]] = None, 
         cmap: Optional[Sequence[str]] = None
