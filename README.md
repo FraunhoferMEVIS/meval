@@ -16,7 +16,7 @@ The toolbox is designed with two main **use cases** in mind:
 1. You have trained a model that you consider reasonably close-to-final. You then use the toolbox to obtain a comprehensive assessment of model performance across many metrics and subgroups of (potential) interest, with minimal effort. If this helps you uncover important failure modes or weak spots of the model, you go back and fix them before shipping, resulting in a more robust final model.
 2. You have a final model and want to generate a comprehensive subgroup performance evaluation report, e.g. for communication with collaborators, scientific publication, or other evaluation purposes. The toolbox enables you to do this, with proper confidence intervals, significance testing, and beautiful resulting graphs, with minimal time effort.
 
-Please refer to our MICCAI 2025 FAIMI Workshop paper for details: [meval: A Statistical Toolbox for Fine-Grained Model Performance Analysis](https://doi.org/10.1007/978-3-032-05870-6_19).
+Please refer to our MICCAI 2025 FAIMI Workshop paper for details: [meval: A Statistical Toolbox for Fine-Grained Model Performance Analysis](https://doi.org/10.1007/978-3-032-05870-6_19). ([arxiv link](https://arxiv.org/abs/2512.17409))
 
 ## Installation
 
