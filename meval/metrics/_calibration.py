@@ -5,9 +5,7 @@ import numpy as np
 import pandas as pd
 import scipy.interpolate
 import scipy.signal
-from betacal import BetaCalibration
 from scipy.interpolate import PchipInterpolator
-from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.isotonic import IsotonicRegression
 from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
 
@@ -277,33 +275,6 @@ def get_unbiased_calibration_rmse(labels, probs, num_bins="sweep", binning_schem
         else:
             bins = binning_scheme(probs, num_bins=num_bins)
         return unbiased_l2_ce(bin(data, bins))
-
-
-class BetaCalibratedClassifier(RegressorMixin, BaseEstimator):
-
-    def __init__(self, base_clf, beta_params="abm"):
-        self.base_clf = base_clf
-        self.beta_model = BetaCalibration(parameters=beta_params)
-
-    def fit(self, X_cal, y_cal):
-        y_preds = self.base_clf.predict_proba(X_cal)
-        # this is an N x 2 matrix with the probabilities of the two classes
-        assert (sum(abs(y_preds.sum(axis=1) - 1) < 1e-7) == len(y_preds))
-        # reduce it to just the likelihood of the "1" class, as usual
-        scores = y_preds[:, 1]
-        self.beta_model.fit(scores, y_cal)
-
-    def predict_proba(self, X_test):
-        y_preds = self.base_clf.predict_proba(X_test)
-        # this is an N x 2 matrix with the probabilities of the two classes
-        assert (sum(abs(y_preds.sum(axis=1) - 1) < 1e-7) == len(y_preds))
-        # reduce it to just the likelihood of the "1" class, as usual
-        scores = y_preds[:, 1]
-        return self.beta_model.predict(scores)
-
-    def __repr__(self):
-        return "Beta calibrated model with \n " + self.beta_model.calibrator_.lr_.__repr__() + \
-            "\n and base model \n" + self.base_clf.__repr__()
 
 
 def smoothen_isotonic_probs(isotonic_probs, pred_probs, method='pchip'):

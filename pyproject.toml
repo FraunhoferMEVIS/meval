@@ -17,7 +17,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-	"betacal",
 	"confidenceinterval",
 	"jinja2",
 	"kaleido>=1.1.0",
