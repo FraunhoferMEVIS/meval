@@ -6,12 +6,24 @@ from confidenceinterval.delong import delong_roc_variance
 import numpy as np
 import scipy.stats
 
-from ._metrics import auroc
 from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar
+from .fastauc import fast_numba_auc
 from ..diags import roc_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
 from ..stats import newcombe_auroc_ci
+
+
+def _fast_binary_auroc_with_min_cases(y_true: pd.Series, y_pred_prob: pd.Series, min_cases_per_class: int = 3) -> float:
+    y_true_np = y_true.to_numpy()
+    y_pred_prob_np = y_pred_prob.to_numpy()
+
+    n_pos = y_true_np.sum()
+    n_neg = len(y_true_np) - n_pos
+    if n_pos < min_cases_per_class or n_neg < min_cases_per_class:
+        return np.nan
+
+    return fast_numba_auc(y_true_np, y_pred_prob_np)
 
 
 class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar):
@@ -41,7 +53,7 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
         y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
 
         if (not return_ci) and (not return_var):
-            return auroc(y_true.to_numpy(), y_pred_prob.to_numpy())
+            return _fast_binary_auroc_with_min_cases(y_true, y_pred_prob, min_cases_per_class=3)
         
         elif (not return_ci) and return_var:
             val, var = self.get_variance(df, group_mask=mask, y_true=y_true, y_pred_prob=y_pred_prob, validate=validate, return_val=True) # type: ignore
@@ -103,7 +115,7 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
                 method = "delong"
 
         if method.upper() == "NEWCOMBE":
-            auc = auroc(y_true.to_numpy(), y_pred_prob.to_numpy())
+            auc = _fast_binary_auroc_with_min_cases(y_true, y_pred_prob, min_cases_per_class=3)
             ci = newcombe_auroc_ci(auc, y_true.to_numpy(), ci_alpha=1-ci_alpha)
 
         elif method.upper() == "DELONG":

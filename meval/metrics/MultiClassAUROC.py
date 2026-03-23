@@ -1,8 +1,10 @@
 from typing import Optional, Literal, cast
 import pandas as pd
+import numpy as np
 
 from ._metrics import auroc
 from .ComparisonMetric import ComparisonMetric
+from .fastauc import fast_ovo_auc_numba
 from ..group_filter import GroupFilter
 
 
@@ -35,5 +37,19 @@ class MultiClassAUROC(ComparisonMetric):
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
         y_true = self.get_multiclass_y_true(df, mask=mask, validate=validate)
         y_pred_prob = self.get_multiclass_y_pred_prob(df, mask=mask, validate=validate)
-        return auroc(y_true.to_numpy(), y_pred_prob.to_numpy(), 
+
+        if self.multiclass_mode == "ovo":
+            y_true_np = y_true.to_numpy()
+            y_pred_prob_np = y_pred_prob.to_numpy()
+            classes, counts = np.unique(y_true_np, return_counts=True)
+
+            # Preserve previous behavior: OvO requires all modeled classes present,
+            # and each present class needs enough samples.
+            if len(classes) < y_pred_prob_np.shape[1] or np.any(counts < self.min_samples_per_class):
+                return np.nan
+
+            labels = [int(col.replace("y_pred_prob_", "")) for col in y_pred_prob.columns]
+            return fast_ovo_auc_numba(y_true_np, y_pred_prob_np, labels=labels)
+
+        return auroc(y_true.to_numpy(), y_pred_prob.to_numpy(),
                      multiclass_mode=self.multiclass_mode, min_cases_per_class=self.min_samples_per_class)

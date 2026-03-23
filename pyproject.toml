@@ -21,6 +21,7 @@ dependencies = [
 	"confidenceinterval",
 	"jinja2",
 	"kaleido>=1.1.0",
+	"numba",
 	"numpy",
 	"pandas",
 	"pandera>=0.24.0",
