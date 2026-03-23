@@ -330,8 +330,9 @@ def compare_groups(df: pd.DataFrame,
 
         # Multiple testing correction
         pval_cols = [col for col in all_metric_results_df.columns if 'pval' in col.lower()]
-        mask = all_metric_results_df[pval_cols].notna()
-        pvals = all_metric_results_df[pval_cols].values[mask.values]
+        pval_block = all_metric_results_df[pval_cols].to_numpy(copy=True)
+        mask = all_metric_results_df[pval_cols].notna().to_numpy()
+        pvals = pval_block[mask]
         if len(pvals) > 0:
             _, pvals_transformed, _, _ = multipletests(pvals, 
                                                        method=test_correction_method,
@@ -346,10 +347,9 @@ def compare_groups(df: pd.DataFrame,
             # The following line does NOT work since df[cols].values = ... only changes a view of the df, not the df
             #all_metric_results_df[pval_cols].values[mask.values] = pvals_transformed
             # df.loc[mask, pval_Cols] also does not work because mask is 2d
-            # Hence the below workaround with an intermediate copy.
-            temp_df = all_metric_results_df[pval_cols].copy()
-            temp_df.values[mask.values] = pvals_transformed
-            all_metric_results_df[pval_cols] = temp_df
+            # Use a writable numpy copy, then assign back to the DataFrame block.
+            pval_block[mask] = pvals_transformed
+            all_metric_results_df.loc[:, pval_cols] = pval_block
             assert all_metric_results_df[pval_cols].min(axis=None) == pvals_transformed.min()
             assert all_metric_results_df[pval_cols].max(axis=None) == pvals_transformed.max()
 

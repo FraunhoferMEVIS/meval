@@ -98,6 +98,24 @@ def test_complement():
     assert all(GroupFilter({'b': pd.NA}).complement(df) == [True, True, False])
 
 
+def test_parse_attributes_with_pandas_extension_dtypes():
+    df = pd.DataFrame(
+        {
+            'site': pd.Series(['A', pd.NA], dtype='string'),
+            'flag': pd.Series([True, False], dtype='boolean'),
+        }
+    )
+
+    parsed_site = GroupFilter.parse_attributes_from_repr('site=<NA>', col_types=df.dtypes.to_dict())
+    assert parsed_site['site'] is pd.NA
+
+    parsed_flag_true = GroupFilter.parse_attributes_from_repr('flag=True', col_types=df.dtypes.to_dict())
+    assert parsed_flag_true['flag'] is True
+
+    parsed_flag_false = GroupFilter.parse_attributes_from_repr('flag=False', col_types=df.dtypes.to_dict())
+    assert parsed_flag_false['flag'] is False
+
+
 if __name__ == "__main__":
     test_names_and_reprs()
     test_calls_with_nans()

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import warnings
 from statsmodels.stats.multitest import multipletests
-from meval.metrics import Accuracy
+from meval.metrics import Accuracy, Specificity
 from meval import compare_groups
 from meval.config import settings
 
@@ -152,6 +152,32 @@ def test_can_override_bh_permut_sufficiency_guard_for_testing():
         assert not np.isnan(all_metric_results_df.loc['group1=A', 'Acc pval'])
     finally:
         settings.from_dict(old_settings)
+
+
+def test_multitest_with_multiple_pval_columns_writeback_is_stable():
+    settings.load_testing_config(parallel=False)
+    settings.update(testing=False, enable_bh_permut_sufficiency_guard=True, N_test_permut=1000)
+
+    test_df = pd.DataFrame({
+        'y_true': [True, False, True, False, True, False, True, False, True, False, True, False],
+        'y_pred': [True, False, True, True, False, True, False, False, True, False, False, True],
+        'group1': ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C', 'C', 'C'],
+    })
+
+    all_metric_results_df, _ = compare_groups(
+        df=test_df,
+        metrics=[Accuracy(test=True), Specificity(test=True)],
+        group_by='group1',
+        min_subgroup_size=1,
+    )
+
+    pval_cols = [col for col in all_metric_results_df.columns if 'pval' in col.lower()]
+    assert len(pval_cols) == 2
+
+    for col in pval_cols:
+        vals = all_metric_results_df[col].dropna().to_numpy()
+        assert np.all(vals >= 0)
+        assert np.all(vals <= 1)
 
 
 if __name__ == '__main__':

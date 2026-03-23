@@ -1,7 +1,6 @@
-from typing import Optional
+from typing import Any, Optional, cast
 
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 import pandera.pandas as pa
 
@@ -37,7 +36,7 @@ def safe_np_isnan(val_or_arr_or_series):
         return np.isnan(val_or_arr_or_series)
     else:
         out = np.full(len(val_or_arr_or_series), False, dtype=bool)
-        isnumeric = np.array([any([np.issubdtype(type(x), numtype) for numtype in numtypes]) for x in val_or_arr_or_series.values])
+        isnumeric = np.array([isinstance(x, tuple(numtypes)) for x in val_or_arr_or_series.values], dtype=bool)
         out[isnumeric] = np.isnan(pd.to_numeric(val_or_arr_or_series[isnumeric], errors='raise'))
         return out
 
@@ -47,7 +46,7 @@ class GroupFilter(object):
         self,
         group_attribute_dict: Optional[dict] = None,
         group_repr_str: Optional[str] = None,
-        col_types: Optional[dict[str, npt.DTypeLike] | pd.Series] = None,
+        col_types: Optional[dict[str, Any] | pd.Series] = None,
     ) -> None:
         # pass group_attribute_dict={} to create 'all' group
         if group_attribute_dict is not None:
@@ -78,8 +77,10 @@ class GroupFilter(object):
 
     @staticmethod
     def parse_attributes_from_repr(
-        repr_str: str, col_types: dict[str, npt.DTypeLike] | pd.Series
+        repr_str: str, col_types: dict[str, Any] | pd.Series
     ) -> dict:
+        col_types_map = col_types.to_dict() if isinstance(col_types, pd.Series) else col_types
+
         if repr_str == "all":
             attribute_dict = {}
         else:
@@ -96,8 +97,23 @@ class GroupFilter(object):
                     # for categorical columns, we need to use the categories dtype to correctly parse the value
                     # since np does not know what to do with e.g.
                     # 'CategoricalDtype(categories=['no', 'yes'], ordered=False, categories_dtype=object)'
-                    col_type = col_types[k].categories.dtype if hasattr(col_types[k], 'categories') else col_types[k]
-                    return np.array(v, dtype=col_type).item()
+                    col_type_raw = col_types_map[k]
+                    categories = getattr(col_type_raw, "categories", None)
+                    col_type = categories.dtype if categories is not None else col_type_raw
+
+                    # Parse bools explicitly to avoid bool("False") -> True casting behavior.
+                    if pd.api.types.is_bool_dtype(col_type):
+                        if v == "True":
+                            return True
+                        if v == "False":
+                            return False
+
+                    # Prefer pandas-aware scalar parsing so extension dtypes such as
+                    # StringDtype/Int64 are handled correctly.
+                    try:
+                        return cast(Any, pd.Series([v], dtype=cast(Any, col_type)).iloc[0])
+                    except (TypeError, ValueError):
+                        return np.array(v, dtype=col_type).item()
 
             attribute_dict = {
                 k: parse_val(k, v)
