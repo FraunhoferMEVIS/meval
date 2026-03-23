@@ -1,7 +1,8 @@
 import itertools
+import inspect
 import time
 import warnings
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, current_process, get_start_method
 from typing import Collection, Optional, Sequence
 import signal
 import sys
@@ -83,6 +84,32 @@ def initialize_pool(settings_dict):
     # settings, disregarding any changes to the settings that have been made.
     from meval.config import settings
     settings.update(**settings_dict)
+
+
+def _is_main_module_top_level_python_file_call() -> bool:
+    """Return True when called from top-level code in a Python script run as __main__."""
+    frame = inspect.currentframe()
+    if frame is None:
+        return False
+
+    try:
+        # frame -> this helper, frame.f_back -> compare_groups,
+        # frame.f_back.f_back -> caller of compare_groups (what we need).
+        compare_groups_frame = frame.f_back
+        if compare_groups_frame is None:
+            return False
+
+        caller = compare_groups_frame.f_back
+        if caller is None:
+            return False
+
+        caller_name = caller.f_code.co_name
+        caller_module = caller.f_globals.get("__name__")
+        caller_file = str(caller.f_code.co_filename)
+
+        return caller_name == "<module>" and caller_module == "__main__" and caller_file.endswith(".py")
+    finally:
+        del frame
 
 
 def compare_groups(df: pd.DataFrame, 
@@ -184,7 +211,29 @@ def compare_groups(df: pd.DataFrame,
             if isinstance(metric, ThresholdedComparisonMetric) and metric.threshold is None:
                 metric.set_threshold(threshold)
 
-    if settings.parallel and cpu_count() > 1:
+    run_parallel = settings.parallel and cpu_count() > 1
+
+    if run_parallel and current_process().name == "MainProcess":
+        start_method = get_start_method(allow_none=True)
+        if start_method is None and sys.platform.startswith("win"):
+            # On Windows, spawn is the default even when the start method
+            # has not been explicitly initialized yet.
+            start_method = "spawn"
+        if start_method == "spawn" and _is_main_module_top_level_python_file_call():
+            raise RuntimeError(
+                "Parallel execution was requested from top-level script code while using spawn multiprocessing. "
+                "This can cause recursive worker re-entry. Move runtime code into a `main()` function and call it "
+                "under `if __name__ == '__main__':`."
+            )
+    
+    if run_parallel and current_process().name != "MainProcess":
+        raise RuntimeError(
+            "Parallel execution was requested from a non-main process. "
+            "If this happens in a script, wrap runtime code in `if __name__ == '__main__':`."
+        )
+
+    if run_parallel:
+    #if settings.parallel and cpu_count() > 1:
 
         all_inputs = []
         for metric in metrics:
