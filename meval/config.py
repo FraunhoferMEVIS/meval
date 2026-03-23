@@ -22,6 +22,7 @@ class Settings:
         self.parallel = self._get_env_bool("MEVAL_PARALLEL", True if not self.debug else False)
         self.N_test_permut = self._get_env_int("MEVAL_N_TEST_PERMUT", 1000)
         self.max_N_student_bootstrap = self._get_env_int("MEVAL_MAX_N_STUDENT_BOOTSTRAP", 100)
+        self.pval_early_stop_alpha = self._get_env_float("MEVAL_PVAL_EARLY_STOP_ALPHA", 0.01)
 
     def update(self, **kwargs) -> None:
         """Update settings with provided values."""
@@ -88,7 +89,8 @@ class Settings:
             "seed": (self._get_env_int, f"{prefix}SEED"),
             "parallel": (self._get_env_bool, f"{prefix}PARALLEL"),
             "N_test_permut": (self._get_env_int, f"{prefix}N_TEST_PERMUT"),
-            "max_N_student_bootstrap": (self._get_env_int, f"{prefix}MAX_N_STUDENT_BOOTSTRAP")
+            "max_N_student_bootstrap": (self._get_env_int, f"{prefix}MAX_N_STUDENT_BOOTSTRAP"),
+            "pval_early_stop_alpha": (self._get_env_float, f"{prefix}PVAL_EARLY_STOP_ALPHA")
         }
         
         for setting_name, (converter, env_name) in mappings.items():

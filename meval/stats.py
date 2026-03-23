@@ -220,16 +220,77 @@ def est_variance_of_metric_diff(df, metric, group_mask, complement_mask, max_num
     return var_of_metric_diff_est, metric_diff
     
 
+def _clopper_pearson_lower(M: int, N: int, confidence: float) -> float:
+    """
+    Clopper-Pearson lower confidence bound for a binomial proportion.
+
+    Given M successes in N trials, returns the lower bound p_lo of the
+    exact one-sided (lower) Clopper-Pearson interval at the given confidence
+    level.
+
+    This is used for early stopping of the permutation test: if p_lo > alpha,
+    then with probability >= `confidence` the true P-value exceeds alpha,
+    and we can safely conclude the result is non-significant.
+
+    Args:
+        M: number of permutation values exceeding the test statistic (>= 1).
+        N: total number of valid (non-NaN) permutation values.
+        confidence: desired confidence level (e.g. 0.9999 for 99.99%).
+
+    Returns:
+        Clopper-Pearson lower confidence bound on the true proportion.
+    """
+    # One-sided lower bound at confidence level c uses quantile (1-c)
+    # of Beta(M, N-M+1).
+    # scipy.stats.beta.ppf(q, a, b) gives the q-th quantile of Beta(a,b).
+    alpha_tail = 1.0 - confidence
+    return float(scipy.stats.beta.ppf(alpha_tail, M, N - M + 1))
+
+
 def studentized_permut_pval(
-    df: pd.DataFrame, 
-    metric: ComparisonMetric, 
-    group_filter: GroupFilter, 
+    df: pd.DataFrame,
+    metric: ComparisonMetric,
+    group_filter: GroupFilter,
     num_permut: Optional[int] = None,
     max_num_bootstrap: Optional[int] = None,
-    correct_zero_pvals: bool = True
+    correct_zero_pvals: bool = True,
+    pval_early_stop_alpha: Optional[float] = settings.pval_early_stop_alpha,
     ) -> tuple[float, float]:
     # Algo 1 in https://arxiv.org/abs/2007.05124
     # (My implementation)
+    #
+    # Early stopping is enabled by default using
+    # settings.pval_early_stop_alpha.
+    # Set pval_early_stop_alpha=None to force the legacy behaviour of always
+    # running all permutations in a specific call.
+    #
+    # Early stopping logic (when pval_early_stop_alpha is not None):
+    # Permutations are run in batches of 100.  After each batch (once at
+    # least 100 valid permutations have been collected), we check whether
+    # the result is clearly non-significant. This criterion is inspired by
+    # the binomial-count logic in Knijnenburg et al. (2009), but is an
+    # intentionally simpler method than their ECDF/GPD switch: we stop if the
+    # one-sided 99.99% Clopper-Pearson lower bound on the empirical P-value
+    # estimate exceeds pval_early_stop_alpha.
+    # We additionally require M >= 20 exceedances (vs M >= 10 in their paper)
+    # for extra conservatism.
+    # We never stop early when the P-value looks small.
+
+    # Confidence level for the Clopper-Pearson lower bound used in the
+    # early-stop criterion.  We stop only when the CP lower bound on P̂
+    # already exceeds pval_early_stop_alpha, meaning: with probability
+    # >= _EARLY_STOP_CONFIDENCE the true P-value is above alpha.
+    # 99.99% is very conservative; the expected false-early-stop rate
+    # across a full analysis is negligible.
+    _EARLY_STOP_CONFIDENCE = 0.9999
+    # Require at least this many exceedances before trusting the CP bound.
+    # Higher than Knijnenburg's M>=10 for extra conservatism.
+    _EARLY_STOP_MIN_M = 20
+    # Minimum permutations before any early-stop check.
+    _EARLY_STOP_MIN_PERMUT = 100
+    # Batch size for early-stop checks.
+    _EARLY_STOP_BATCH = 100
+    early_stopped = False
 
     if num_permut is None:
         num_permut = settings.N_test_permut
@@ -265,17 +326,56 @@ def studentized_permut_pval(
             S = metric_diff / np.sqrt(var_of_metric_diff_est)
         return S
 
-    S_permut = np.array([get_studentized_permut() for _ in range(num_permut)])
+    if pval_early_stop_alpha is None:
+        # Original behaviour: run all permutations upfront.
+        S_permut = np.array([get_studentized_permut() for _ in range(num_permut)])
+    else:
+        # Batched loop with conservative early stopping.
+        S_permut_list: list[float] = []
+        for batch_start in range(0, num_permut, _EARLY_STOP_BATCH):
+            batch_end = min(batch_start + _EARLY_STOP_BATCH, num_permut)
+            for _ in range(batch_end - batch_start):
+                S_permut_list.append(get_studentized_permut())
 
-    # two-sided pval
-    pval = nan_mean(np.abs(S_permut) > np.abs(S_base), nan_fraction_allowed=0.5)
+            n_done = len(S_permut_list)
+            if n_done < _EARLY_STOP_MIN_PERMUT:
+                continue
+
+            s_arr = np.array(S_permut_list)
+            valid = s_arr[~np.isnan(s_arr)]
+            N_valid = len(valid)
+            if N_valid < _EARLY_STOP_MIN_PERMUT:
+                continue
+
+            M = int(np.sum(np.abs(valid) >= np.abs(S_base)))
+            if M < _EARLY_STOP_MIN_M:
+                # Too few exceedances; CP bound would be unreliable.
+                continue
+
+            # Clopper-Pearson lower bound: with probability
+            # >= _EARLY_STOP_CONFIDENCE the true P-value exceeds lb.
+            lb = _clopper_pearson_lower(M, N_valid, _EARLY_STOP_CONFIDENCE)
+            if lb > pval_early_stop_alpha:
+                early_stopped = True
+                break  # Clearly non-significant; stop early.
+
+        S_permut = np.array(S_permut_list)
+
+    # two-sided pval; NaNs are handled by nan_mean
+    pval = nan_mean(np.abs(S_permut) >= np.abs(S_base), nan_fraction_allowed=0.5)
 
     if correct_zero_pvals:
-        # We cannot find pvals < 1/n_permut, ever. 
-        # So for any pval == 0 above, the correct interpretation is "pval < 1/n_permut".
-        # To enable meaningful further analyses, it is often useful to set pvals==0 to a value closer to 1/n_permut.
+        # We cannot find pvals < 1/n_valid_permut, ever.
+        # So for any pval == 0 above, the correct interpretation is "pval < 1/n_valid_permut".
+        # To enable meaningful further analyses, it is often useful to set pvals==0 to a value closer to 1/n_valid_permut.
         if pval == 0:
-            pval = 0.99 / num_permut
+            # This combination should be impossible, because early stopping
+            # requires many exceedances by construction.
+            assert not early_stopped, "Internal error: early-stopped run produced pval==0."
+            valid = S_permut[~np.isnan(S_permut)]
+            n_valid_permut = len(valid)
+            assert n_valid_permut > 0
+            pval = 0.99 / n_valid_permut
 
     return pval, metric_diff
 

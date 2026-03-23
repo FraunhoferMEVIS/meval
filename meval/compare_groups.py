@@ -32,7 +32,12 @@ def calc_metric(df: pd.DataFrame,
         metric_val = metric(df, group_filter)
 
         if metric.test and not group_filter.group_name == 'all' and (test_groups is None or group_filter.group_name in test_groups):
-            pval, effect = studentized_permut_pval(df, metric, group_filter)
+            pval, effect = studentized_permut_pval(
+                df,
+                metric,
+                group_filter,
+                pval_early_stop_alpha=settings.pval_early_stop_alpha,
+            )
         else:
             pval, effect = np.nan, np.nan
 
@@ -233,8 +238,7 @@ def compare_groups(df: pd.DataFrame,
         )
 
     if run_parallel:
-    #if settings.parallel and cpu_count() > 1:
-
+        
         all_inputs = []
         for metric in metrics:
             inputs = list(zip(itertools.repeat(df), itertools.repeat(metric), analysis_group_filters, itertools.repeat(test_groups)))
