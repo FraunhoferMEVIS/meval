@@ -11,7 +11,6 @@ import plotly.io as pio
 from plotly.basedatatypes import BaseTraceType
 from plotly.subplots import make_subplots
 import kaleido
-kaleido.get_chrome_sync()  # https://github.com/plotly/Kaleido/issues/402#issuecomment-4064296132
 from warnings import warn
 
 from .config import settings
@@ -50,6 +49,33 @@ default_layout_with_title = default_layout | {
 }
 
 
+_KALEIDO_CHROME_READY = False
+
+
+def _ensure_kaleido_chrome() -> None:
+    """Ensure Chrome needed by kaleido is available (once per process).
+
+    This is intentionally lazy to avoid import-time side effects in spawned
+    worker processes and concurrent sessions.
+    """
+    global _KALEIDO_CHROME_READY
+    if _KALEIDO_CHROME_READY:
+        return
+
+    try:
+        # https://github.com/plotly/Kaleido/issues/402#issuecomment-4064296132
+        kaleido.get_chrome_sync()
+    except Exception as exc:
+        warn(
+            "Kaleido Chrome setup failed while preparing PNG export. "
+            f"PNG export may fail: {exc}",
+            RuntimeWarning,
+        )
+    finally:
+        # Avoid repeatedly re-running setup attempts in this process.
+        _KALEIDO_CHROME_READY = True
+
+
 def process_export_file(
         fig: go.Figure, 
         export_file: str, 
@@ -70,6 +96,8 @@ def process_export_file(
             print(f"An unexpected error occurred: {e}")
 
     elif export_file.endswith(".png"):
+
+        _ensure_kaleido_chrome()
 
         if export_fig_size_in is None and export_fig_size_cm is None:
             export_fig_size_cm = (10, 7)  # default

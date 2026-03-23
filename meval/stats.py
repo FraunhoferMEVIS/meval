@@ -275,6 +275,7 @@ def studentized_permut_pval(
     # We additionally require M >= 20 exceedances (vs M >= 10 in their paper)
     # for extra conservatism.
     # We never stop early when the P-value looks small.
+    # Knijnenburg et al. (2009): https://pmc.ncbi.nlm.nih.gov/articles/PMC2687965/
 
     # Confidence level for the Clopper-Pearson lower bound used in the
     # early-stop criterion.  We stop only when the CP lower bound on P̂

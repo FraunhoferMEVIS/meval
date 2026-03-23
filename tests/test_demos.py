@@ -1,6 +1,6 @@
 # Settings must be changed before importing anything else from meval!
 from meval.config import settings
-settings.update(N_bootstrap=10, N_test_permut=10, max_N_student_bootstrap=10, parallel=True)
+settings.load_testing_config(parallel=True)
 
 from demos.isic.demo import isic_demo
 from demos.mimic.demo import mimic_demo

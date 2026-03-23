@@ -23,6 +23,23 @@ class Settings:
         self.N_test_permut = self._get_env_int("MEVAL_N_TEST_PERMUT", 1000)
         self.max_N_student_bootstrap = self._get_env_int("MEVAL_MAX_N_STUDENT_BOOTSTRAP", 100)
         self.pval_early_stop_alpha = self._get_env_float("MEVAL_PVAL_EARLY_STOP_ALPHA", 0.01)
+        self.enable_bh_permut_sufficiency_guard = self._get_env_bool("MEVAL_ENABLE_BH_PERMUT_SUFFICIENCY_GUARD", True)
+        self.testing = self._get_env_bool("MEVAL_TESTING", False)
+
+    def load_testing_config(self, parallel: bool = False) -> None:
+        """Load the common lightweight test configuration.
+
+        Args:
+            parallel: Whether tests should run compare_groups in parallel mode.
+        """
+        self.update(
+            testing=True,
+            N_bootstrap=10,
+            N_test_permut=10,
+            max_N_student_bootstrap=10,
+            parallel=parallel,
+            enable_bh_permut_sufficiency_guard=False,
+        )
 
     def update(self, **kwargs) -> None:
         """Update settings with provided values."""
@@ -90,7 +107,9 @@ class Settings:
             "parallel": (self._get_env_bool, f"{prefix}PARALLEL"),
             "N_test_permut": (self._get_env_int, f"{prefix}N_TEST_PERMUT"),
             "max_N_student_bootstrap": (self._get_env_int, f"{prefix}MAX_N_STUDENT_BOOTSTRAP"),
-            "pval_early_stop_alpha": (self._get_env_float, f"{prefix}PVAL_EARLY_STOP_ALPHA")
+            "pval_early_stop_alpha": (self._get_env_float, f"{prefix}PVAL_EARLY_STOP_ALPHA"),
+            "enable_bh_permut_sufficiency_guard": (self._get_env_bool, f"{prefix}ENABLE_BH_PERMUT_SUFFICIENCY_GUARD"),
+            "testing": (self._get_env_bool, f"{prefix}TESTING")
         }
         
         for setting_name, (converter, env_name) in mappings.items():

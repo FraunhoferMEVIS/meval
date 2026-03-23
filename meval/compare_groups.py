@@ -207,6 +207,38 @@ def compare_groups(df: pd.DataFrame,
 
         test_groups, test_group_complements = find_binary_complements(df, group_by, analysis_group_filters)
 
+        # Pre-flight check: with permutation floor 1/N and BH correction over m tests,
+        # the best-case corrected p-value for an isolated strong signal is m/N.
+        # If m/N exceeds the significance alpha, significance cannot be detected.
+        if (
+            test_correction_method == "fdr_bh"
+            and settings.enable_bh_permut_sufficiency_guard
+            and not settings.testing
+        ):
+            sig_alpha = settings.pval_early_stop_alpha
+            if sig_alpha is not None:
+                n_test_metrics = sum(metric.test for metric in metrics)
+                n_tests = n_test_metrics * len(test_groups)
+                min_detectable_pval_corr = n_tests / settings.N_test_permut if settings.N_test_permut > 0 else np.inf
+                if n_tests > 0 and min_detectable_pval_corr > sig_alpha:
+                    warnings.warn(
+                        "num_permut too small and num_groups too large to identify significant pvals; "
+                        "under fdr_bh, the best-case corrected minimum is n_tests/N_test_permut="
+                        f"{n_tests}/{settings.N_test_permut}={min_detectable_pval_corr:.4g}, "
+                        f"which exceeds alpha={sig_alpha:.4g}. "
+                        "Proceeding without significance testing. "
+                        "To re-enable testing, increase settings.N_test_permut "
+                        "(env: MEVAL_N_TEST_PERMUT), or relax the target alpha via "
+                        "settings.pval_early_stop_alpha (env: MEVAL_PVAL_EARLY_STOP_ALPHA), "
+                        "or reduce the number of tested groups/metrics. "
+                        "To bypass this pre-check (e.g. in tests), set "
+                        "settings.enable_bh_permut_sufficiency_guard=False "
+                        "(env: MEVAL_ENABLE_BH_PERMUT_SUFFICIENCY_GUARD=false).",
+                        UserWarning,
+                    )
+                    test_groups = []
+                    test_group_complements = {}
+
     else:
         test_groups = None
         test_group_complements = {}

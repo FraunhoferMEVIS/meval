@@ -29,5 +29,5 @@ if __name__ == '__main__':
     # fix for multiprocessing / pdb bug: https://github.com/python/cpython/issues/87115
     __spec__ = None    
 
-    settings.update(N_bootstrap=10, N_test_permut=10, max_N_student_bootstrap=10, parallel=True)
+    settings.load_testing_config(parallel=True)
     test_error_propagation()
