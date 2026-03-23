@@ -112,7 +112,7 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
                 auc, ci = np.nan, (np.nan, np.nan)
 
             else:
-                auc, variance = self.get_variance(df, group_mask=mask, validate=validate, y_true=y_true, y_pred_prob=y_pred_prob, return_val=True) # type: ignore
+                auc, variance = self.get_variance(df, group_mask=mask, validate=validate, y_true=y_true, y_pred_prob=y_pred_prob, return_val=True, method="delong") # type: ignore
                 alpha = 1 - ci_alpha
                 z = scipy.stats.norm.ppf(1 - alpha / 2)
 
@@ -177,18 +177,22 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
             z_alpha_2 = scipy.stats.norm.ppf((1 - ci_alpha)/2)
             var = ((ci[1] - ci[0]) / (2 * z_alpha_2))**2
 
-        if y_true.sum() <= 1 or y_true.sum() >= len(y_true)-1:
-            # Technically, this is only true in the case where there are 0 positives or negatives.
-            # However, the DeLong algorithm used below also fails for the npos=1 or nneg=1 cases.
-            # Since the variance will be huge in this case, anyway, it doesn't seem too bad to just reject this case, as well.
-            val, var = np.nan, np.nan
+        elif method.upper() == "DELONG":
+            if y_true.sum() <= 1 or y_true.sum() >= len(y_true)-1:
+                # Technically, this is only true in the case where there are 0 positives or negatives.
+                # However, the DeLong algorithm used below also fails for the npos=1 or nneg=1 cases.
+                # Since the variance will be huge in this case, anyway, it doesn't seem too bad to just reject this case, as well.
+                val, var = np.nan, np.nan
+
+            else:
+                # Caution: DeLong (unrealistically) returns var=0 if auroc=1.
+                val, var = delong_roc_variance(y_true.astype(int).values, y_pred_prob.values)
+                assert 0 <= val <= 1.001
+                assert var >= 0
+                val = min(val, 1.0)  # https://github.com/jacobgil/confidenceinterval/issues/15
 
         else:
-            # Caution: DeLong (unrealistically) returns var=0 if auroc=1.
-            val, var = delong_roc_variance(y_true.astype(int).values, y_pred_prob.values)
-            assert 0 <= val <= 1.001
-            assert var >= 0
-            val = min(val, 1.0)  # https://github.com/jacobgil/confidenceinterval/issues/15
+            raise NotImplementedError("Valid methods are 'auto', 'newcombe', 'delong'.")
 
         if return_val:
             return val, var
