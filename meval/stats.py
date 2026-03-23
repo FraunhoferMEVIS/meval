@@ -147,8 +147,8 @@ def bootstrap_variance_of_metric_diff(
             bs_metric_samples_a = bs_metric_samples_a_batch
             bs_metric_samples_b = bs_metric_samples_b_batch
         else:
-            bs_metric_samples_a = np.concat([bs_metric_samples_a, bs_metric_samples_a_batch], axis=0)
-            bs_metric_samples_b = np.concat([bs_metric_samples_b, bs_metric_samples_b_batch], axis=0)
+            bs_metric_samples_a = np.concatenate([bs_metric_samples_a, bs_metric_samples_a_batch], axis=0)
+            bs_metric_samples_b = np.concatenate([bs_metric_samples_b, bs_metric_samples_b_batch], axis=0)
 
         assert bs_metric_samples_a.ndim == 1
         assert bs_metric_samples_b.ndim == 1
