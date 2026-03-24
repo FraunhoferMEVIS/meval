@@ -1,8 +1,9 @@
 from meval.group_filter import GroupFilter
 import pandas as pd
 import numpy as np
-from multiprocessing import Pool, cpu_count
+from multiprocessing import cpu_count, get_context
 from itertools import repeat
+
 
 def test_names_and_reprs():
     attr_dict = {'a': 2, 'b': 2.5, 'c': np.nan, 'd': pd.NA, 'e': 'yes', 'f': True}
@@ -45,8 +46,10 @@ def test_calls_with_nans():
     assert GroupFilter({'d': pd.NA})(df).sum() == 1
     assert GroupFilter({'c': np.nan, 'd': pd.NA})(df).sum() == 1
 
-    # Specifically test a case with mixed dtype
-    df = pd.DataFrame({'a': [2, 'AA', np.nan], 'b': ['BB', 'CC', pd.NA]})
+    # Specifically test a case with mixed dtype.
+    # (pandas 3.0 introduces a new string dtype that would handles this case differently.
+    #  Without the explicit type casting, we would get different behavior across pandas versions here.)
+    df = pd.DataFrame({'a': [2, 'AA', np.nan], 'b': pd.Series(np.array(['BB', 'CC', pd.NA], dtype=object), dtype=object)})
     assert GroupFilter({'a': 2})(df).sum() == 1
     assert GroupFilter({'a': np.nan})(df).sum() == 1
     assert GroupFilter({'a': pd.NA})(df).sum() == 0
@@ -78,7 +81,7 @@ def test_calls_with_nans():
     ]
 
     # This is loosely modeled after what we do in compare_groups.py
-    with Pool(cpu_count()) as pool:
+    with get_context("spawn").Pool(cpu_count()) as pool:
         masks_lst = pool.starmap(apply_filter, zip(filters, repeat(df)))
 
     assert all(masks_lst[0] == [True, False, False])
@@ -86,10 +89,11 @@ def test_calls_with_nans():
     assert all(masks_lst[2] == [False, False, False])
 
     
-
-
 def test_complement():
-    df = pd.DataFrame({'a': [2, 'AA', np.nan], 'b': ['BB', 'CC', pd.NA]})
+    # Specifically test a case with mixed dtype.
+    # (pandas 3.0 introduces a new string dtype that would handles this case differently.
+    #  Without the explicit type casting, we would get different behavior across pandas versions here.)    
+    df = pd.DataFrame({'a': [2, 'AA', np.nan], 'b': pd.Series(np.array(['BB', 'CC', pd.NA], dtype=object), dtype=object)})
     assert all(GroupFilter({'a': 2}).complement(df) == [False, True, True])
     assert all(GroupFilter({'a': np.nan}).complement(df) == [True, True, False])
     assert all(GroupFilter({'a': pd.NA}).complement(df) == [True, True, True])
