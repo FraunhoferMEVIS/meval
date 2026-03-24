@@ -2,6 +2,7 @@ import pandas as pd
 from meval import compare_groups
 from meval.metrics import Accuracy, ProportionOfPos, BrierScore, AUROC, AUPRG, DRMSCE, Count, thresh_tune
 from meval.diags import plot_metric_overview, metric_plot, roc_diag, rel_diag, prg_diag, pr_diag
+from meval.config import settings
 
 def isic_demo():
 
@@ -58,5 +59,5 @@ def isic_demo():
 if __name__ == "__main__":
     # fix for multiprocessing / pdb bug: https://github.com/python/cpython/issues/87115
     __spec__ = None
-
+    settings.update(N_test_permut=10000)
     isic_demo()

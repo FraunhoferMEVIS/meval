@@ -4,7 +4,7 @@ from meval.metrics import Specificity, ProportionOfPos, BrierScore, AUROC, AUPRG
 from meval.metrics.ThresholdSelection import thresh_tune
 from meval.diags import metric_plot, roc_diag, plot_metric_overview, rel_diag
 from meval import compare_groups
-
+from meval.config import settings
 
 def read_mimic_df():
     df = pd.read_csv('mimic_results.csv', index_col=0)
@@ -53,5 +53,5 @@ def mimic_demo():
 if __name__ == "__main__":
     # fix for multiprocessing / pdb bug: https://github.com/python/cpython/issues/87115
     __spec__ = None
-        
+    settings.update(N_test_permut=10000)
     mimic_demo()
