@@ -78,5 +78,6 @@ if __name__ == '__main__':
     __spec__ = None    
 
     settings.load_testing_config(parallel=False)
+    
     test_find_binary_complements()
     test_binary_complement_tests()
