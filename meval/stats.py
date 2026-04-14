@@ -4,11 +4,39 @@ from typing import Optional
 from collections.abc import Callable
 import scipy
 
-from ._array_types import FloatArray, LabelArray, NumericArray
+try:
+    from numba import njit as _numba_njit
+    _NUMBA_AVAILABLE = True
+except Exception:
+    _numba_njit = None
+    _NUMBA_AVAILABLE = False
+
+from ._array_types import FloatArray, LabelArray, MaskLike, NumericArray
 from .config import settings
 from .group_filter import GroupFilter
 from .metrics.ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar
 
+
+if _NUMBA_AVAILABLE:
+    @_numba_njit(cache=True)  # type: ignore[misc, operator]
+    def _shuffle_copy_fisher_yates_numba(src: np.ndarray, dst: np.ndarray, rand_floats: np.ndarray) -> None:
+        # Claude says: The Fisher-Yates implementation itself is correct. rand_floats size is n-1, the loop 
+        # runs n-1 iterations with index k in [0, n-2] — no out-of-bounds. The output is a uniform permutation 
+        # equivalent to rng.shuffle.
+        # Also see https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+        n = src.shape[0]
+        for i in range(n):
+            dst[i] = src[i]
+
+        k = 0
+        for i in range(n - 1, 0, -1):
+            # rand_floats contains uniform values in [0.0, 1.0)
+            # Multiplying by (i + 1) and casting to int gives an unbiased integer in [0, i]
+            j = int(rand_floats[k] * (i + 1))
+            k += 1
+            tmp = dst[i]
+            dst[i] = dst[j]
+            dst[j] = tmp
 
 class RandomState:
     _rng = None
@@ -63,7 +91,7 @@ def bootstrap_metric(
         df: pd.DataFrame, 
         metric: ComparisonMetric, 
         group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[pd.Series] = None, 
+        group_mask: Optional[MaskLike] = None,
         num_bootstrap: Optional[int] = None
         ) -> np.ndarray:
 
@@ -76,10 +104,12 @@ def bootstrap_metric(
             assert group_filter is not None
             group_mask = group_filter(df)
             
-        N_sample = group_mask.sum()
+        sample_positions = _mask_to_positions(group_mask, len(df))
+        N_sample = len(sample_positions)
 
         if metric.needs_all_classes:
-            y_true = ComparisonMetric.get_multiclass_y_true(df, mask=group_mask, validate=False)
+            # `mask` accepts either a boolean mask or integer row positions.
+            y_true = ComparisonMetric.get_multiclass_y_true(df, mask=sample_positions, validate=False)
             stratify, class_counts = decide_stratify(y_true)
         else:
             stratify = False
@@ -88,22 +118,26 @@ def bootstrap_metric(
 
         if stratify:
             assert y_true is not None
+            y_true_np = np.asarray(y_true)
             # Stratified sampling: sample from each class separately
             bs_idces_by_class = []
             for cls, count in class_counts.items():
-                cls_indices = df.index[group_mask][y_true == cls]
+                cls_indices = sample_positions[y_true_np == cls]
                 bs_idces_cls = rng.choice(cls_indices, (count, num_bootstrap), replace=True)
                 bs_idces_by_class.append(bs_idces_cls)
             bs_idces_all = np.concatenate(bs_idces_by_class, axis=0)            
 
         else:
-            bs_idces_all = rng.choice(df.index[group_mask], (N_sample, num_bootstrap), replace=True)
+            bs_idces_all = rng.choice(sample_positions, (N_sample, num_bootstrap), replace=True)
 
-        metric_bs = np.apply_along_axis(lambda bs_idces: metric(df.loc[bs_idces, :], 
-                                                                group_mask=group_mask.loc[bs_idces], 
-                                                                validate=False),
-                                        axis=0,
-                                        arr=bs_idces_all)
+        metric_bs = np.empty(num_bootstrap, dtype=float)
+        for j in range(num_bootstrap):
+            bs_idces = bs_idces_all[:, j]
+            metric_bs[j] = metric(
+                df,
+                group_mask=bs_idces,
+                validate=False,
+            )
 
         assert len(metric_bs) == num_bootstrap
         return metric_bs
@@ -118,6 +152,34 @@ def bootstrap_ci(df, metric, group_filter, num_bootstrap, ci_alpha):
     #med = ci_nan_quantile(metric_bs, 0.5)
     upper = ci_nan_quantile(metric_bs, ci_alpha + (1 - ci_alpha) / 2)
     return lower, upper
+
+
+def _mask_to_positions(mask: MaskLike, n_rows: int) -> np.ndarray:
+    # Claude says: np.asarray(mask, dtype=int) on an already-int64 array returns the same object. 
+    # In bootstrap_metric, this means sample_positions aliases shuffle_work[...]. 
+    # As analyzed, this is safe because rng.choice(sample_positions, ...) reads before any next 
+    # shuffle occurs. Not a bug but worth being aware of.
+    if isinstance(mask, pd.Series):
+        mask_np = mask.to_numpy(copy=False)
+    else:
+        mask_np = mask
+
+    if np.issubdtype(mask_np.dtype, np.integer):
+        return np.asarray(mask_np, dtype=int)
+
+    if mask_np.dtype == bool:
+        assert len(mask_np) == n_rows
+        return np.flatnonzero(mask_np)
+
+    raise TypeError("Unsupported mask dtype; expected bool mask or integer positions.")
+
+
+def _masks_are_disjoint(mask_a: MaskLike, mask_b: MaskLike, n_rows: int) -> bool:
+    pos_a = _mask_to_positions(mask_a, n_rows)
+    pos_b = _mask_to_positions(mask_b, n_rows)
+    if len(pos_a) == 0 or len(pos_b) == 0:
+        return True
+    return len(np.intersect1d(pos_a, pos_b, assume_unique=False)) == 0
 
 
 def bootstrap_variance_of_metric_diff(
@@ -179,25 +241,67 @@ def bootstrap_variance_of_metric_diff(
     return var_of_metric_diff_est, metric_diff # type: ignore
 
 
-def shuffle_masks(mask_a: pd.Series, mask_b: pd.Series) -> tuple[pd.Series, pd.Series]:
+def shuffle_masks(
+    mask_a: Optional[MaskLike] = None,
+    mask_b: Optional[MaskLike] = None,
+    *,
+    idces_joined: Optional[np.ndarray] = None,
+    n_a: Optional[int] = None,
+    work_buffer: Optional[np.ndarray] = None,
+) -> tuple[np.ndarray, np.ndarray]:
 
     rng = RandomState.get_rng()
 
-    idces_a = np.nonzero(mask_a)[0]
-    idces_b = np.nonzero(mask_b)[0]
-    idces_joined = np.concatenate([idces_a, idces_b])
-    idces_permuted = rng.permutation(idces_joined)
+    if idces_joined is None:
+        assert mask_a is not None and mask_b is not None
+        mask_a_np = _mask_to_positions(mask_a, len(mask_a))
+        mask_b_np = _mask_to_positions(mask_b, len(mask_b))
+        idces_a = mask_a_np
+        idces_b = mask_b_np
+        idces_joined = np.concatenate([idces_a, idces_b])
+        n_a = idces_a.size
 
-    shuffled_a = pd.Series(False, index=mask_a.index)
-    shuffled_a.iloc[idces_permuted[:mask_a.sum()]] = True
-    shuffled_b = pd.Series(False, index=mask_b.index)
-    shuffled_b.iloc[idces_permuted[mask_a.sum():]] = True
+    assert n_a is not None
 
-    assert mask_a.sum() == shuffled_a.sum()
-    assert mask_b.sum() == shuffled_b.sum()
-    assert ((mask_a | mask_b) == (shuffled_a | shuffled_b)).all()
+    return shuffle_masks_from_state(
+        idces_joined=idces_joined,
+        n_a=n_a,
+        work_buffer=work_buffer,
+        rng=rng,
+    )
 
-    return shuffled_a, shuffled_b
+
+def shuffle_masks_from_state(
+    idces_joined: np.ndarray,
+    n_a: int,
+    work_buffer: Optional[np.ndarray],
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray]:
+
+    # Claude says: shuffled_a_np and shuffled_b_np are views into work_buffer. 
+    # They're consumed before the next permutation overwrites the buffer, so this 
+    # is safe in the current sequential code, but the contract is implicit.
+
+    if work_buffer is None:
+        idces_permuted = rng.permutation(idces_joined)
+    else:
+        if settings.enable_numba_shuffle and _NUMBA_AVAILABLE and idces_joined.size > 128:
+            # Generate 64-bit uniform floats to avoid modulo bias and uint bounds issues
+            rand_floats = rng.random(size=idces_joined.size - 1, dtype=np.float64)
+            _shuffle_copy_fisher_yates_numba(idces_joined, work_buffer, rand_floats)
+        else:
+            np.copyto(work_buffer, idces_joined)
+            rng.shuffle(work_buffer)
+        idces_permuted = work_buffer
+
+    shuffled_a_np = idces_permuted[:n_a]
+    shuffled_b_np = idces_permuted[n_a:]
+
+    if settings.debug:
+        assert len(shuffled_a_np) == n_a
+        assert len(np.intersect1d(shuffled_a_np, shuffled_b_np, assume_unique=False)) == 0
+
+    return shuffled_a_np, shuffled_b_np
 
 
 def est_variance_of_metric_diff(df, metric, group_mask, complement_mask, max_num_bootstrap):
@@ -206,7 +310,8 @@ def est_variance_of_metric_diff(df, metric, group_mask, complement_mask, max_num
         metric_val_b, metric_var_b = metric.get_variance(df, group_mask=complement_mask, validate=False, return_val=True) # type: ignore
         metric_diff = metric_val_a - metric_val_b
         # This is only true if the two samples are independent! That is the case in the sample vs. complement situation.
-        assert not (group_mask & complement_mask).any()
+        if settings.debug:
+            assert _masks_are_disjoint(group_mask, complement_mask, len(df))
         var_of_metric_diff_est = metric_var_a + metric_var_b
 
         if metric_var_a == 0 or metric_var_b == 0 or not np.isfinite(var_of_metric_diff_est):
@@ -305,7 +410,15 @@ def studentized_permut_pval(
     group_mask = group_filter(df)
     complement_mask = group_filter.complement(df)
 
-    if group_mask.sum() == 0 or complement_mask.sum() == 0:
+    # Precompute shuffle state once to avoid repeated mask->index conversion in
+    # every permutation draw.
+    idces_a_base = _mask_to_positions(group_mask, len(df))
+    idces_b_base = _mask_to_positions(complement_mask, len(df))
+    idces_joined_base = np.concatenate([idces_a_base, idces_b_base])
+    n_a_base = idces_a_base.size
+    shuffle_work = np.empty_like(idces_joined_base)
+
+    if len(idces_a_base) == 0 or len(idces_b_base) == 0:
         return np.nan, np.nan
 
     var_of_metric_diff_est, metric_diff = est_variance_of_metric_diff(df, metric=metric, group_mask=group_mask, complement_mask=complement_mask,
@@ -319,7 +432,16 @@ def studentized_permut_pval(
     S_base = metric_diff / np.sqrt(var_of_metric_diff_est)
 
     def get_studentized_permut():
-        mask_a, mask_b = shuffle_masks(group_mask, complement_mask)
+        # This is a custom reimplementation of permutation shuffling that beats off-the-shelf implementations 
+        # by a large margin in our setting, because it avoids repeated mask->index conversions and because
+        # we can exploit the fact that we are repeatedly shuffling the same set of indices with the same sizes. 
+        # See test_shuffle_distributions.py for a comparison of the distributions of our shuffle vs. np.random.permutation.
+        mask_a, mask_b = shuffle_masks(
+            idces_joined=idces_joined_base,
+            n_a=n_a_base,
+            work_buffer=shuffle_work,
+        )
+
         var_of_metric_diff_est, metric_diff = est_variance_of_metric_diff(df, metric, group_mask=mask_a, complement_mask=mask_b,
                                                                           max_num_bootstrap=max_num_bootstrap)
         if not (np.isfinite(metric_diff) and np.isfinite(var_of_metric_diff_est)):
@@ -486,6 +608,10 @@ def hanley_var(auroc: float, y_true: pd.Series | LabelArray):
 
 
 def newcombe_auroc_ci(auroc_val: float, y_true: pd.Series | LabelArray, ci_alpha: float):  # this wants a 'small' ci_alpha, i.e. 0.05 (and not 0.95)
+    
+    if np.isnan(auroc_val):
+        return [np.nan, np.nan]
+    
     assert isinstance(y_true, pd.Series) or isinstance(y_true, np.ndarray)
     z = scipy.stats.norm(loc=0, scale=1).ppf(1-ci_alpha/2)
     if auroc_val - 1e-4 > 0.0:

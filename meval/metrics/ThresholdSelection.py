@@ -14,8 +14,8 @@ def thresh_tune(
 ) -> float:
 
     if df is not None:
-        y_true = ComparisonMetric.get_binary_y_true(df)
-        y_pred_prob = ComparisonMetric.get_binary_y_pred_prob(df)
+        y_true = ComparisonMetric.get_binary_y_true(df, return_array=True)
+        y_pred_prob = ComparisonMetric.get_binary_y_pred_prob(df, return_array=True)
     else:
         y_true = np.asarray(y_true)
         y_pred_prob = np.asarray(y_pred_prob)

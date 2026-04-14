@@ -1,9 +1,9 @@
 from typing import Optional
 import pandas as pd
 
-from .ComparisonMetric import ComparisonMetric
+import numpy as np
+from .ComparisonMetric import ComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
-
 
 class Count(ComparisonMetric):
 
@@ -21,9 +21,14 @@ class Count(ComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True
         ) -> int:
         
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
-        return mask.sum()
+        if isinstance(mask, np.ndarray) and np.issubdtype(mask.dtype, np.integer):
+            return len(mask)
+        return int(mask.sum())
+
+
+

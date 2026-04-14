@@ -3,7 +3,7 @@ from plotly.basedatatypes import BaseTraceType
 import plotly.graph_objects as go
 import pandas as pd
 
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric
+from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MaskLike
 from ._calibration import get_unbiased_calibration_rmse
 from ..diags import rel_diag
 from ..group_filter import GroupFilter
@@ -29,14 +29,14 @@ class DRMSCE(CurveBasedComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True
         ) -> float:
 
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
-        y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
-        y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
-        return get_unbiased_calibration_rmse(y_true.to_numpy(), y_pred_prob.to_numpy())
+        y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
+        y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True)
+        return get_unbiased_calibration_rmse(y_true, y_pred_prob)
     
     def plot_supporting_curve(
             self, 
@@ -53,3 +53,7 @@ class DRMSCE(CurveBasedComparisonMetric):
         fig, rel_traces, layout_kwargs = rel_diag(test_df, plot_groups_rel, group_color_dict=group_colors_dict, add_risk_density=False,
                                                   legend=False, fig_title=None, threshold=threshold)
         return fig, rel_traces, layout_kwargs
+
+
+
+

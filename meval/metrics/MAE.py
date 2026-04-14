@@ -1,7 +1,8 @@
 from typing import Optional
+import numpy as np
 import pandas as pd
 
-from .ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar
+from .ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar, MaskLike
 from ..group_filter import GroupFilter
 
 
@@ -21,21 +22,26 @@ class MAE(MetricWithAnalyticalVar):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True,
         return_var: bool = False
         ) -> float | tuple[float, float]:
         
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
+        y_true_np = self.get_float_y_true(df, mask=mask, validate=validate, return_array=True)
+        y_pred_np = self.get_float_y_pred(df, mask=mask, validate=validate, return_array=True)
+        errs = np.abs(y_true_np - y_pred_np)
+        n_total = errs.size
+        n_valid = int(np.isfinite(errs).sum())
 
-        y_true = self.get_float_y_true(df, mask=mask, validate=validate)
-        y_pred = self.get_float_y_pred(df, mask=mask, validate=validate)
-
-        abserrs = (y_true-y_pred).abs()
-        mae = abserrs.mean()
+        if n_valid == 0:
+            mae = np.nan
+            var = np.nan
+        else:
+            mae = float(np.nanmean(errs))
+            var = np.nan if n_valid <= 1 else float(np.nanvar(errs, ddof=1) / n_total)
         
         if return_var:
-            var = abserrs.var(ddof=1) / len(abserrs)
             return mae, var
         else:
             return mae
@@ -44,27 +50,44 @@ class MAE(MetricWithAnalyticalVar):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True,
-        y_true: Optional[pd.Series] = None,
-        y_pred: Optional[pd.Series] = None,
-        y_pred_prob: Optional[pd.Series] = None,
+        y_true: Optional[pd.Series | np.ndarray] = None,
+        y_pred: Optional[pd.Series | np.ndarray] = None,
+        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
         return_val: Optional[bool] = False
         ) -> float | tuple[float, float]:
 
         assert y_pred_prob is None, "MAE does not use y_pred_prob, expected y_pred_prob to be None."
 
-        mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
+        mask: Optional[MaskLike]
+        if y_true is None or y_pred is None:
+            mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
+        else:
+            mask = None
+
         if y_true is None:
-            y_true = self.get_float_y_true(df, mask=mask, validate=validate)
+            y_true_np = self.get_float_y_true(df, mask=mask, validate=validate, return_array=True)
+        else:
+            y_true_np = np.asarray(y_true, dtype=float)
+
         if y_pred is None:
-            y_pred = self.get_float_y_pred(df, mask=mask, validate=validate)
+            y_pred_np = self.get_float_y_pred(df, mask=mask, validate=validate, return_array=True)
+        else:
+            y_pred_np = np.asarray(y_pred, dtype=float)
 
-        abserrs = (y_true-y_pred).abs()
+        errs = np.abs(y_true_np - y_pred_np)
+        n_valid = int(np.isfinite(errs).sum())
 
-        var = abserrs.var(ddof=1) / len(abserrs)
+        if n_valid == 0:
+            val = np.nan
+            var = np.nan
+        else:
+            val = float(np.nanmean(errs))
+            var = np.nan if n_valid <= 1 else float(np.nanvar(errs, ddof=1) / n_valid)
 
         if return_val:
-            return abserrs.mean(), var
+            return val, var
         else:
             return var
+

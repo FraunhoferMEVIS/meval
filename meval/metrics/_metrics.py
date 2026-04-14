@@ -260,7 +260,7 @@ def bootstrap_pr_curve(
 def auroc(target: LabelArray,
           preds: FloatArray,
           multiclass_mode: Literal["binary", "ovr", "ovo"] = "binary",
-          min_cases_per_class: int = 3
+          min_cases_per_class: Optional[int] = None
           ) -> float:
     """
     Compute AUROC for binary or multiclass classification.
@@ -278,6 +278,8 @@ def auroc(target: LabelArray,
     """
     classes, counts = np.unique(target, return_counts=True)
     n_classes = len(classes)
+    if min_cases_per_class is None:
+        min_cases_per_class = settings.auroc_min_cases_per_class
     
     if multiclass_mode == "binary":
         # Binary case: check for both positive and negative examples

@@ -2,7 +2,7 @@ from typing import Optional
 import pandas as pd
 
 from ._metrics import recall
-from .ComparisonMetric import ComparisonMetric, ThresholdedComparisonMetric
+from .ComparisonMetric import ComparisonMetric, ThresholdedComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
 
 
@@ -24,12 +24,16 @@ class Recall(ThresholdedComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
         
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
-        y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
-        y_pred = self.get_binary_y_pred(df, mask=mask, validate=validate)
+        y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
+        y_pred = self.get_binary_y_pred(df, mask=mask, validate=validate, return_array=True)
 
-        return recall(y_true.to_numpy(), y_pred.to_numpy())
+        return recall(y_true, y_pred)
+
+
+
+

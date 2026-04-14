@@ -1,7 +1,7 @@
 from typing import Optional
 import pandas as pd
 
-from .ComparisonMetric import ComparisonMetric
+from .ComparisonMetric import ComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
 
 
@@ -21,9 +21,14 @@ class ProportionOfPos(ComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True
         ) -> float:
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
-        y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
-        return y_true.sum() / mask.sum()
+        y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
+        return float(y_true.mean())
+
+
+
+
+

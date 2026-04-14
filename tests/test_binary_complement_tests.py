@@ -61,6 +61,7 @@ def test_find_binary_complements():
 def test_binary_complement_tests():
 
     df, metrics, group_by, _ = setup()
+    settings.update(pval_early_stop_alpha=None)
 
     results_df, _ = compare_groups(df, metrics, group_by=group_by, group_interactions=1, min_subgroup_size=1)
 

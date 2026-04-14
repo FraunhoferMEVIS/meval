@@ -1,8 +1,9 @@
 from typing import Optional
 import pandas as pd
+import numpy as np
 
 from ._metrics import brier_scores
-from .ComparisonMetric import ComparisonMetric
+from .ComparisonMetric import ComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
 
 
@@ -23,17 +24,21 @@ class BrierScore(ComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True
         ) -> float:
         
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
 
-        y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
-        y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
+        y_true = np.asarray(self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True), dtype=bool)
+        y_pred_prob = np.asarray(self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True), dtype=float)
 
-        brier_score, brier_score_pos, brier_score_neg, brier_score_bal = brier_scores(y_true.to_numpy(), y_pred_prob.to_numpy())
+        brier_score, brier_score_pos, brier_score_neg, brier_score_bal = brier_scores(y_true, y_pred_prob)
         if self.balanced:
             return brier_score_bal
         else:
             return brier_score
+
+
+
+

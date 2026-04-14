@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from ._metrics import area_under_precision_recall_gain_score
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric
+from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MaskLike
 from ..diags import prg_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
@@ -34,15 +34,14 @@ class AUPRG(CurveBasedComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True
         ) -> float:
         
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
-        y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
-        y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
-        #return calc_auprg_from_data(y_true.to_numpy(), y_pred_prob.to_numpy())
-        return area_under_precision_recall_gain_score(y_true.to_numpy(), y_pred_prob.to_numpy(), 
+        y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
+        y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True)
+        return area_under_precision_recall_gain_score(y_true, y_pred_prob,
                                                       rec_gain_min=self.rec_gain_min)
 
     def plot_supporting_curve(
@@ -60,3 +59,7 @@ class AUPRG(CurveBasedComparisonMetric):
         fig, prg_traces, layout_kwargs = prg_diag(test_df, plot_groups_prg, group_color_dict=group_colors_dict, legend=False, fig_title='',
                                                   rec_gain_min=self.rec_gain_min, threshold=threshold)
         return fig, prg_traces, layout_kwargs
+
+
+
+

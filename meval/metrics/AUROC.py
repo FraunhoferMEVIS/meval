@@ -6,17 +6,22 @@ from confidenceinterval.delong import delong_roc_variance
 import numpy as np
 import scipy.stats
 
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar
+from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar, MaskLike
 from .fastauc import fast_numba_auc
 from ..diags import roc_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
+from ..config import settings
 from ..stats import newcombe_auroc_ci
 
 
-def _fast_binary_auroc_with_min_cases(y_true: pd.Series, y_pred_prob: pd.Series, min_cases_per_class: int = 3) -> float:
-    y_true_np = y_true.to_numpy()
-    y_pred_prob_np = y_pred_prob.to_numpy()
+def _fast_binary_auroc_with_min_cases(
+    y_true: pd.Series | np.ndarray,
+    y_pred_prob: pd.Series | np.ndarray,
+    min_cases_per_class: int = 3,
+) -> float:
+    y_true_np = np.asarray(y_true)
+    y_pred_prob_np = np.asarray(y_pred_prob, dtype=float)
 
     n_pos = y_true_np.sum()
     n_neg = len(y_true_np) - n_pos
@@ -24,6 +29,40 @@ def _fast_binary_auroc_with_min_cases(y_true: pd.Series, y_pred_prob: pd.Series,
         return np.nan
 
     return fast_numba_auc(y_true_np, y_pred_prob_np)
+
+
+def _to_binary_arrays(
+    y_true: pd.Series | np.ndarray,
+    y_pred_prob: pd.Series | np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    y_true_np = np.asarray(y_true, dtype=bool)
+    y_pred_prob_np = np.asarray(y_pred_prob, dtype=float)
+    assert y_true_np.ndim == 1
+    assert y_pred_prob_np.ndim == 1
+    assert y_true_np.shape[0] == y_pred_prob_np.shape[0]
+    return y_true_np, y_pred_prob_np
+
+
+def _choose_auto_method(y_true_np: np.ndarray, y_pred_prob_np: np.ndarray) -> str:
+    n_samples = y_true_np.shape[0]
+
+    # Small sample size = DeLong really bad
+    # https://doi.org/10.1177/0962280215602040
+    if n_samples <= 50:
+        return "newcombe"
+
+    pos_scores = y_pred_prob_np[y_true_np]
+    neg_scores = y_pred_prob_np[~y_true_np]
+
+    # Perfect separation = DeLong really bad
+    # https://doi.org/10.1177/0962280215602040
+    if pos_scores.min() > neg_scores.max():
+        return "newcombe"
+
+    # I am actually not entirely sure whether delong is ever *better* than newcombe?
+    # It might/should? yield tighter CIs, since newcombe does not take the actual score distribution into account?
+    # I have not yet seen a paper actually demonstrating this, though.
+    return "delong"
 
 
 class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar):
@@ -42,29 +81,33 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True,
         return_ci: bool = False,
         return_var: bool = False
         ) -> float | tuple[float, float] | tuple[float, tuple[float, float]]:
         
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
-        y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
-        y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
+        y_true_np = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
+        y_pred_prob_np = self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True)
 
         if (not return_ci) and (not return_var):
-            return _fast_binary_auroc_with_min_cases(y_true, y_pred_prob, min_cases_per_class=3)
-        
-        elif (not return_ci) and return_var:
-            val, var = self.get_variance(df, group_mask=mask, y_true=y_true, y_pred_prob=y_pred_prob, validate=validate, return_val=True) # type: ignore
+            return _fast_binary_auroc_with_min_cases(y_true_np, y_pred_prob_np, min_cases_per_class=settings.auroc_min_cases_per_class)
+
+        if (not return_ci) and return_var:
+            variance_out = self.get_variance(df, group_mask=mask, y_true=y_true_np, y_pred_prob=y_pred_prob_np, validate=validate, return_val=True)
+            assert isinstance(variance_out, tuple)
+            val, var = variance_out
             return val, var
 
-        elif return_ci and not return_var:
-            val, ci = self.get_ci(df, group_mask=mask, y_true=y_true, y_pred_prob=y_pred_prob, validate=validate, return_val=True)
-            return val, ci # type: ignore
+        if return_ci and not return_var:
+            ci_out = self.get_ci(df, group_mask=mask, y_true=y_true_np, y_pred_prob=y_pred_prob_np, validate=validate, return_val=True)
+            assert isinstance(ci_out, tuple)
+            val, ci = ci_out
+            assert isinstance(ci, tuple)
+            return val, ci
         
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
 
     
     def plot_supporting_curve(
@@ -86,54 +129,54 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         ci_alpha: float = 0.95,
         validate: bool = True,
-        y_true: Optional[pd.Series] = None,
-        y_pred: Optional[pd.Series] = None,
-        y_pred_prob: Optional[pd.Series] = None,        
+        y_true: Optional[pd.Series | np.ndarray] = None,
+        y_pred: Optional[pd.Series | np.ndarray] = None,
+        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
         return_val: Optional[bool] = False,
         method: str = "auto"
         ) -> tuple[float, float] | tuple[float, tuple[float, float]]:
 
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
+        min_cases_per_class = settings.auroc_min_cases_per_class
         if y_true is None:
-            y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
+            y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
         if y_pred_prob is None:
-            y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
+            y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True)
+
+        y_true_np, y_pred_prob_np = _to_binary_arrays(y_true, y_pred_prob)
 
         if method.upper() == "AUTO":
-            if mask.sum() <= 50 or y_pred_prob[y_true.astype(bool)].min() > y_pred_prob[~y_true.astype(bool)].max():
-                # Small sample size = DeLong really bad
-                # Perfect separation = DeLong really bad
-                # https://doi.org/10.1177/0962280215602040
-                method = "newcombe"
-            else:
-                # I am actually not entirely sure whether delong is ever *better* than newcombe?
-                # It might yield tighter CIs, since newcombe does not take the actual score distribution into account?
-                # I have not seen a paper showing this, though.
-                method = "delong"
+            method = _choose_auto_method(y_true_np, y_pred_prob_np)
 
         if method.upper() == "NEWCOMBE":
-            auc = _fast_binary_auroc_with_min_cases(y_true, y_pred_prob, min_cases_per_class=3)
-            ci = newcombe_auroc_ci(auc, y_true.to_numpy(), ci_alpha=1-ci_alpha)
+            auc = _fast_binary_auroc_with_min_cases(y_true_np, y_pred_prob_np, min_cases_per_class=min_cases_per_class)
+            ci_list = newcombe_auroc_ci(auc, y_true_np, ci_alpha=1-ci_alpha)
+            ci = (float(ci_list[0]), float(ci_list[1]))
 
         elif method.upper() == "DELONG":
 
-            if y_true.sum() <= 1 or y_true.sum() >= len(y_true)-1:
+            n_pos = int(y_true_np.sum())
+            if n_pos < min_cases_per_class or n_pos > len(y_true_np) - min_cases_per_class:
                 auc, ci = np.nan, (np.nan, np.nan)
 
             else:
-                auc, variance = self.get_variance(df, group_mask=mask, validate=validate, y_true=y_true, y_pred_prob=y_pred_prob, return_val=True, method="delong") # type: ignore
+                variance_out = self.get_variance(df, group_mask=mask, validate=validate, y_true=y_true_np, y_pred_prob=y_pred_prob_np, return_val=True, method="delong")
+                assert isinstance(variance_out, tuple)
+                auc, variance = variance_out
                 alpha = 1 - ci_alpha
                 z = scipy.stats.norm.ppf(1 - alpha / 2)
+                auc = float(auc)
+                variance = float(variance)
 
                 # This assumes a normal distribution.
                 # That's a relatively standard approach, also implemented e.g. in the pROC R package.
                 # Apparently, this assumption is also not completely unfounded:
                 # https://stats.stackexchange.com/a/361647/131402
                 # It does however sometimes result in CIs outside [0, 1], which is why we need the clipping below.
-                ci = max(auc - z * np.sqrt(variance), 0), min(auc + z * np.sqrt(variance), 1)
+                ci = (float(max(auc - z * np.sqrt(variance), 0)), float(min(auc + z * np.sqrt(variance), 1)))
 
                 assert 0 <= auc <= 1
                 assert 0 <= ci[0] <= 1
@@ -144,7 +187,7 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
             raise NotImplementedError("Valid methods are 'auto', 'newcombe', 'delong'.")
 
         if return_val:
-            return auc, ci
+            return float(auc), ci
         else:
             return ci 
 
@@ -152,45 +195,42 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True,
-        y_true: Optional[pd.Series] = None,
-        y_pred: Optional[pd.Series] = None,
-        y_pred_prob: Optional[pd.Series] = None,
+        y_true: Optional[pd.Series | np.ndarray] = None,
+        y_pred: Optional[pd.Series | np.ndarray] = None,
+        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
         return_val: Optional[bool] = False,
         method: str = "auto",
         ) -> float | tuple[float, float]:
 
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
+        min_cases_per_class = settings.auroc_min_cases_per_class
         if y_true is None:
-            y_true = self.get_binary_y_true(df, mask=mask, validate=validate)
+            y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
         if y_pred_prob is None:
-            y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
+            y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True)
+
+        y_true_np, y_pred_prob_np = _to_binary_arrays(y_true, y_pred_prob)
 
         if method.upper() == "AUTO":
-            if mask.sum() <= 50 or y_pred_prob[y_true.astype(bool)].min() > y_pred_prob[~y_true.astype(bool)].max():
-                # Small sample size = DeLong really bad
-                # Perfect separation = DeLong really bad
-                # https://doi.org/10.1177/0962280215602040
-                method = "newcombe"
-            else:
-                # I am actually not entirely sure whether delong is ever *better* than newcombe?
-                # It might yield tighter CIs, since newcombe does not take the actual score distribution into account?
-                # I have not seen a paper showing this, though.
-                method = "delong"
+            method = _choose_auto_method(y_true_np, y_pred_prob_np)
 
         if method.upper() == "NEWCOMBE":
             ci_alpha = 0.95
-            val, ci = self.get_ci(df, group_mask=mask, validate=validate, y_true=y_true, y_pred_prob=y_pred_prob, return_val=True, method="newcombe", ci_alpha=ci_alpha) # type: ignore
+            val, ci = self.get_ci(df, group_mask=mask, validate=validate, y_true=y_true_np, y_pred_prob=y_pred_prob_np, return_val=True, method="newcombe", ci_alpha=ci_alpha)
+            val = float(val)
 
             # Estimate variance using normal approximation
             # CI width = 2 * z_α/2 * SE, so SE = CI_width / (2 * z_α/2)
             # variance = SE²
             z_alpha_2 = scipy.stats.norm.ppf((1 - ci_alpha)/2)
-            var = ((ci[1] - ci[0]) / (2 * z_alpha_2))**2
+            assert isinstance(ci, tuple)
+            var = float(((ci[1] - ci[0]) / (2 * z_alpha_2))**2)
 
         elif method.upper() == "DELONG":
-            if y_true.sum() <= 1 or y_true.sum() >= len(y_true)-1:
+            n_pos = int(y_true_np.sum())
+            if n_pos < min_cases_per_class or n_pos > len(y_true_np) - min_cases_per_class:
                 # Technically, this is only true in the case where there are 0 positives or negatives.
                 # However, the DeLong algorithm used below also fails for the npos=1 or nneg=1 cases.
                 # Since the variance will be huge in this case, anyway, it doesn't seem too bad to just reject this case, as well.
@@ -198,10 +238,11 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
 
             else:
                 # Caution: DeLong (unrealistically) returns var=0 if auroc=1.
-                val, var = delong_roc_variance(y_true.astype(int).values, y_pred_prob.values)
+                val, var = delong_roc_variance(y_true_np.astype(int), y_pred_prob_np)
                 assert 0 <= val <= 1.001
                 assert var >= 0
-                val = min(val, 1.0)  # https://github.com/jacobgil/confidenceinterval/issues/15
+                val = float(min(val, 1.0))  # https://github.com/jacobgil/confidenceinterval/issues/15
+                var = float(var)
 
         else:
             raise NotImplementedError("Valid methods are 'auto', 'newcombe', 'delong'.")
@@ -210,3 +251,5 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
             return val, var
         else:
             return var
+
+

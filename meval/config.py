@@ -20,6 +20,8 @@ class Settings:
         self.ci_plot_alpha = self._get_env_float("MEVAL_CI_PLOT_ALPHA", 0.3)
         self.seed = self._get_env_int("MEVAL_SEED", 49)
         self.parallel = self._get_env_bool("MEVAL_PARALLEL", True if not self.debug else False)
+        self.enable_numba_shuffle = self._get_env_bool("MEVAL_ENABLE_NUMBA_SHUFFLE", True)
+        self.auroc_min_cases_per_class = self._get_env_int("MEVAL_AUROC_MIN_CASES_PER_CLASS", 2)
         self.N_test_permut = self._get_env_int("MEVAL_N_TEST_PERMUT", 1000)
         self.max_N_student_bootstrap = self._get_env_int("MEVAL_MAX_N_STUDENT_BOOTSTRAP", 100)
         self.pval_early_stop_alpha = self._get_env_float("MEVAL_PVAL_EARLY_STOP_ALPHA", 0.01)
@@ -38,6 +40,7 @@ class Settings:
             N_test_permut=10,
             max_N_student_bootstrap=10,
             parallel=parallel,
+            enable_numba_shuffle=True,
             enable_bh_permut_sufficiency_guard=False,
         )
 
@@ -105,6 +108,8 @@ class Settings:
             "ci_plot_alpha": (self._get_env_float, f"{prefix}CI_PLOT_ALPHA"),
             "seed": (self._get_env_int, f"{prefix}SEED"),
             "parallel": (self._get_env_bool, f"{prefix}PARALLEL"),
+            "enable_numba_shuffle": (self._get_env_bool, f"{prefix}ENABLE_NUMBA_SHUFFLE"),
+            "auroc_min_cases_per_class": (self._get_env_int, f"{prefix}AUROC_MIN_CASES_PER_CLASS"),
             "N_test_permut": (self._get_env_int, f"{prefix}N_TEST_PERMUT"),
             "max_N_student_bootstrap": (self._get_env_int, f"{prefix}MAX_N_STUDENT_BOOTSTRAP"),
             "pval_early_stop_alpha": (self._get_env_float, f"{prefix}PVAL_EARLY_STOP_ALPHA"),

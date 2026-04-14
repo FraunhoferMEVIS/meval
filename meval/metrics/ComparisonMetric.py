@@ -6,6 +6,7 @@ import pandera.pandas as pa
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseTraceType
 from ..group_filter import GroupFilter
+from .._array_types import MaskLike
 
 
 class ComparisonMetric(ABC):
@@ -46,7 +47,7 @@ class ComparisonMetric(ABC):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
         raise NotImplementedError
@@ -55,9 +56,9 @@ class ComparisonMetric(ABC):
     def _get_group_mask(
             df: pd.DataFrame, 
             group_filter: Optional[GroupFilter] = None, 
-            mask: Optional[pd.Series] = None,
+            mask: Optional[MaskLike] = None,
             validate: bool = True
-            ) -> pd.Series:
+            ) -> MaskLike:
 
         if mask is None:
             if group_filter is None:
@@ -67,13 +68,105 @@ class ComparisonMetric(ABC):
 
         return mask
 
+    @staticmethod
+    def _resolve_col_name(df: pd.DataFrame, candidate_cols: Sequence[str], col_desc: str) -> str:
+        # Resolve the first recognized column name for a semantic field (e.g. y_true, y_pred).
+        # This centralizes alias handling and keeps error messages consistent across helpers.
+        matches = [col for col in candidate_cols if col in df.columns]
+        if not matches:
+            raise RuntimeError(f"Found no {col_desc} column in the provided dataframe. Recognized column names are: {list(candidate_cols)}.")
+        return matches[0]
+
+    @staticmethod
+    def _masked_series(col: pd.Series, mask: Optional[MaskLike]) -> pd.Series:
+        if mask is None:
+            return col
+
+        if isinstance(mask, pd.Series) and not pd.api.types.is_bool_dtype(mask.dtype):
+            raise TypeError("Pandas mask series must have boolean dtype.")
+
+        if isinstance(mask, np.ndarray) and np.issubdtype(mask.dtype, np.integer):
+            return pd.Series(col.to_numpy(copy=False)[mask], copy=False)
+
+        # Fast path for aligned boolean masks avoids pandas internals-heavy
+        # boolean indexing on each call in hot loops.
+        if isinstance(mask, np.ndarray) and mask.dtype == bool and len(mask) == len(col):
+            return pd.Series(col.to_numpy(copy=False)[mask], copy=False)
+
+        if (
+            isinstance(mask, pd.Series)
+            and mask.dtype == bool
+            and len(mask) == len(col)
+            and (mask.index is col.index or mask.index.equals(col.index))
+        ):
+            mask_np = mask.to_numpy(copy=False)
+            return pd.Series(col.to_numpy(copy=False)[mask_np], copy=False)
+
+        # Fallback keeps pandas' full index-alignment semantics.
+        return col[mask]
+
+    @staticmethod
+    def _masked_array(col: pd.Series, mask: Optional[MaskLike]) -> np.ndarray:
+        if mask is None:
+            return col.to_numpy(copy=False)
+
+        if isinstance(mask, pd.Series) and not pd.api.types.is_bool_dtype(mask.dtype):
+            raise TypeError("Pandas mask series must have boolean dtype.")
+
+        if isinstance(mask, np.ndarray) and np.issubdtype(mask.dtype, np.integer):
+            return col.to_numpy(copy=False)[mask]
+
+        if isinstance(mask, np.ndarray) and mask.dtype == bool and len(mask) == len(col):
+            return col.to_numpy(copy=False)[mask]
+
+        if (
+            isinstance(mask, pd.Series)
+            and mask.dtype == bool
+            and len(mask) == len(col)
+            and (mask.index is col.index or mask.index.equals(col.index))
+        ):
+            return col.to_numpy(copy=False)[mask.to_numpy(copy=False)]
+
+        return col[mask].to_numpy(copy=False)
+
+    @staticmethod
+    def _masked_frame(df: pd.DataFrame, mask: Optional[MaskLike]) -> pd.DataFrame:
+        if mask is None:
+            return df
+
+        if isinstance(mask, pd.Series) and not pd.api.types.is_bool_dtype(mask.dtype):
+            raise TypeError("Pandas mask series must have boolean dtype.")
+
+        if isinstance(mask, np.ndarray) and np.issubdtype(mask.dtype, np.integer):
+            return df.iloc[mask]
+
+        return df.loc[mask]
+
+    @staticmethod
+    def _validate_bool_array(arr: np.ndarray) -> None:
+        assert np.issubdtype(arr.dtype, np.bool_), "Expected boolean array."
+
+    @staticmethod
+    def _validate_int_array(arr: np.ndarray) -> None:
+        assert np.issubdtype(arr.dtype, np.integer), "Expected integer array."
+
+    @staticmethod
+    def _validate_float_array(arr: np.ndarray) -> None:
+        assert np.issubdtype(arr.dtype, np.floating), "Expected float array."
+        assert not np.any(np.isnan(arr)), "Expected non-null float values."
+
+    @staticmethod
+    def _validate_prob_array(arr: np.ndarray) -> None:
+        ComparisonMetric._validate_float_array(arr)
+        assert np.all(arr >= 0.0) and np.all(arr <= 1.0), "Expected probabilities in [0, 1]."
+
     def get_group_mask(
             self, 
             df: pd.DataFrame, 
             group_filter: Optional[GroupFilter] = None, 
-            group_mask: Optional[pd.Series] = None,
+            group_mask: Optional[MaskLike] = None,
             validate: bool = True
-            ) -> pd.Series:
+            ) -> MaskLike:
         if validate:
             for req_col in self.req_cols:
                 if isinstance(req_col, list):  # at least one of these must be present
@@ -87,110 +180,143 @@ class ComparisonMetric(ABC):
     def get_y_true(
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[pd.Series] = None,
-        validate: bool = True
-        ) -> pd.Series:
+        mask: Optional[MaskLike] = None,
+        validate: bool = True,
+        return_array: bool = False,
+        ) -> pd.Series | np.ndarray:
 
         mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
 
-        for colname in ComparisonMetric.y_true_cols:
-            if colname in df.columns:
-                y_true = df[colname][mask]
-                break
-        else:
-            raise RuntimeError(f"Found no label column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_true_cols}.")
+        colname = ComparisonMetric._resolve_col_name(df, ComparisonMetric.y_true_cols, "y_true")
+        if return_array:
+            return ComparisonMetric._masked_array(df[colname], mask)
 
-        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
+        y_true = ComparisonMetric._masked_series(df[colname], mask)
+
+        return y_true
 
     @staticmethod
     def get_binary_y_true(
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[pd.Series] = None,
-        validate: bool = True
-        ) -> pd.Series:
+        mask: Optional[MaskLike] = None,
+        validate: bool = True,
+        return_array: bool = False,
+        ) -> pd.Series | np.ndarray:
+        y_true = ComparisonMetric.get_y_true(
+            df,
+            group_filter=group_filter,
+            mask=mask,
+            validate=validate,
+            return_array=return_array,
+        )
 
-        y_true = ComparisonMetric.get_y_true(df, group_filter=group_filter, mask=mask, validate=validate)
-        
-        if validate:
-            pa.SeriesSchema(bool, nullable=False, unique=False).validate(y_true)
+        if return_array:
+            assert isinstance(y_true, np.ndarray)
+            y_true_np = y_true
+            if validate:
+                ComparisonMetric._validate_bool_array(y_true_np)
+            return y_true_np
+        else:
+            assert isinstance(y_true, pd.Series)
+            y_true_ser = y_true
+            if validate:
+                pa.SeriesSchema(bool, nullable=False, unique=False).validate(y_true_ser)
 
-        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
+            return y_true_ser  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
     
     @staticmethod
     def get_float_y_true(
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[pd.Series] = None,
-        validate: bool = True
-        ) -> pd.Series:
+        mask: Optional[MaskLike] = None,
+        validate: bool = True,
+        return_array: bool = False,
+        ) -> pd.Series | np.ndarray:
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
+        colname = ComparisonMetric._resolve_col_name(df, ComparisonMetric.y_true_cols, "y_true")
 
-        y_true = ComparisonMetric.get_y_true(df, group_filter=group_filter, mask=mask, validate=validate)
+        if return_array:
+            y_true_np = ComparisonMetric._masked_array(df[colname], mask).astype(float, copy=False)
+            if validate:
+                ComparisonMetric._validate_float_array(y_true_np)
+            return y_true_np
+        else:
+            y_true = ComparisonMetric._masked_series(df[colname], mask)
 
-        if validate:
-            pa.SeriesSchema(float, nullable=False, unique=False).validate(y_true)
+            if validate:
+                pa.SeriesSchema(float, nullable=False, unique=False).validate(y_true)
 
-        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
+            return y_true
 
     @staticmethod
     def get_multiclass_y_true(
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[pd.Series] = None,
-        validate: bool = True
-        ) -> pd.Series:
+        mask: Optional[MaskLike] = None,
+        validate: bool = True,
+        return_array: bool = False,
+        ) -> pd.Series | np.ndarray:
+        y_true = ComparisonMetric.get_y_true(
+            df,
+            group_filter=group_filter,
+            mask=mask,
+            validate=validate,
+            return_array=return_array,
+        )
 
-        y_true = ComparisonMetric.get_y_true(df, group_filter=group_filter, mask=mask, validate=validate)
+        if return_array:
+            assert isinstance(y_true, np.ndarray)
+            y_true_np = y_true
+            if validate:
+                ComparisonMetric._validate_int_array(y_true_np)
+            return y_true_np
+        else:
+            assert isinstance(y_true, pd.Series)
+            y_true_ser = y_true
 
-        if validate:
-            pa.SeriesSchema(int, nullable=False, unique=False).validate(y_true)
+            if validate:
+                pa.SeriesSchema(int, nullable=False, unique=False).validate(y_true_ser)
 
-        return y_true  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
+            return y_true_ser  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
 
     @staticmethod
     def get_binary_y_pred_prob(
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None,
-        mask: Optional[pd.Series] = None,
-        validate: bool = True
-        ) -> pd.Series:
+        mask: Optional[MaskLike] = None,
+        validate: bool = True,
+        return_array: bool = False,
+        ) -> pd.Series | np.ndarray:
 
         mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
-
-        for colname in ComparisonMetric.y_pred_prob_cols:
-            if colname in df.columns:
-                y_pred_prob = df[colname][mask]
-                break
+        colname = ComparisonMetric._resolve_col_name(df, ComparisonMetric.y_pred_prob_cols, "pred_prob")
+        if return_array:
+            y_pred_prob_np = ComparisonMetric._masked_array(df[colname], mask).astype(float, copy=False)
+            if validate:
+                ComparisonMetric._validate_prob_array(y_pred_prob_np)
+            return y_pred_prob_np
         else:
-            raise RuntimeError(f"Found no pred_prob column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_pred_prob_cols}.")
+            y_pred_prob = ComparisonMetric._masked_series(df[colname], mask)
 
-        if validate:
-            pa.SeriesSchema(float, 
-                            checks=[pa.Check.greater_than_or_equal_to(0.0),
-                                    pa.Check.less_than_or_equal_to(1.0)],
-                            nullable=False, 
-                            unique=False
-                            ).validate(y_pred_prob)
+            if validate:
+                pa.SeriesSchema(float, 
+                                checks=[pa.Check.greater_than_or_equal_to(0.0),
+                                        pa.Check.less_than_or_equal_to(1.0)],
+                                nullable=False, 
+                                unique=False
+                                ).validate(y_pred_prob)
 
-        return y_pred_prob  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
+            return y_pred_prob  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
 
     @staticmethod
-    def get_multiclass_y_pred_prob(
-        df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        mask: Optional[pd.Series] = None,
-        validate: bool = True
-        ) -> pd.DataFrame:
-
-        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
-
-        # Find all y_pred_prob columns (format: y_pred_prob_{cls_id})
+    def _get_sorted_multiclass_pred_prob_cols(df: pd.DataFrame) -> list[str]:
+        # Find all y_pred_prob columns (format: y_pred_prob_{cls_id}).
         y_pred_prob_cols = [col for col in df.columns if col.startswith("y_pred_prob_")]
-        
+
         if len(y_pred_prob_cols) == 0:
             raise RuntimeError("Found no pred_prob columns in the provided dataframe. Expected columns of the form 'y_pred_prob_{cls_id}'.")
-        
-        # Extract class IDs and sort to ensure consistent ordering
+
         class_ids = []
         for col in y_pred_prob_cols:
             try:
@@ -198,44 +324,66 @@ class ComparisonMetric(ABC):
                 class_ids.append(cls_id)
             except ValueError:
                 raise RuntimeError(f"Invalid column name '{col}'. Expected format 'y_pred_prob_{{cls_id}}' where cls_id is an integer.")
-        
-        # Sort columns by class ID
-        sorted_cols = [f"y_pred_prob_{cls_id}" for cls_id in sorted(class_ids)]
-        
-        # Extract the dataframe with masked rows
-        y_pred_prob = df.loc[mask, sorted_cols]
-        
-        if validate:
-            # Validate that all columns are float and in [0, 1]
-            for col in sorted_cols:
-                pa.SeriesSchema(float, 
-                                checks=[pa.Check.greater_than_or_equal_to(0.0),
-                                        pa.Check.less_than_or_equal_to(1.0)],
-                                nullable=False, 
-                                unique=False
-                                ).validate(y_pred_prob[col])
-            
-            # Optionally: validate that probabilities sum to 1 (or close to it) for each row
-            row_sums = y_pred_prob.sum(axis=1)
-            assert np.allclose(row_sums, 1.0, atol=1e-6), "Predicted probabilities must sum to 1 for each sample"
 
-        return y_pred_prob  # type: ignore
+        return [f"y_pred_prob_{cls_id}" for cls_id in sorted(class_ids)]
+
+    @staticmethod
+    def get_multiclass_y_pred_prob(
+        df: pd.DataFrame, 
+        group_filter: Optional[GroupFilter] = None,
+        mask: Optional[MaskLike] = None,
+        validate: bool = True,
+        return_array: bool = False,
+        ) -> pd.DataFrame | np.ndarray:
+
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
+
+        sorted_cols = ComparisonMetric._get_sorted_multiclass_pred_prob_cols(df)
+        
+        # Extract the dataframe with masked rows.
+        y_pred_prob = ComparisonMetric._masked_frame(df[sorted_cols], mask)
+
+        if return_array:
+            y_pred_prob_np = y_pred_prob.to_numpy(dtype=float, copy=False)
+            if validate:
+                ComparisonMetric._validate_prob_array(y_pred_prob_np)
+                row_sums = y_pred_prob_np.sum(axis=1)
+                assert np.allclose(row_sums, 1.0, atol=1e-6), "Predicted probabilities must sum to 1 for each sample"
+            return y_pred_prob_np
+        else:
+            if validate:
+                # Validate that all columns are float and in [0, 1]
+                for col in sorted_cols:
+                    pa.SeriesSchema(float, 
+                                    checks=[pa.Check.greater_than_or_equal_to(0.0),
+                                            pa.Check.less_than_or_equal_to(1.0)],
+                                    nullable=False, 
+                                    unique=False
+                                    ).validate(y_pred_prob[col])
+                
+                # Optionally: validate that probabilities sum to 1 (or close to it) for each row
+                row_sums = y_pred_prob.sum(axis=1)
+                assert np.allclose(row_sums, 1.0, atol=1e-6), "Predicted probabilities must sum to 1 for each sample"
+
+            return y_pred_prob  # type: ignore
 
     def get_binary_y_pred(
             self, 
             df: pd.DataFrame, 
             group_filter: Optional[GroupFilter] = None,
-            mask: Optional[pd.Series] = None,
+            mask: Optional[MaskLike] = None,
             validate: bool = True,
-            ) -> pd.Series:
+            return_array: bool = False,
+            ) -> pd.Series | np.ndarray:
 
         mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
 
         if 'y_pred' in df.columns:
-            y_pred = df['y_pred'][mask]
+            y_pred = ComparisonMetric._masked_series(df['y_pred'], mask)
 
         elif isinstance(self, ThresholdedComparisonMetric) and self.threshold is not None:
-            y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate)
+            y_pred_prob = self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=False)
+            assert isinstance(y_pred_prob, pd.Series)
             y_pred = y_pred_prob >= self.threshold
 
         else:
@@ -244,29 +392,34 @@ class ComparisonMetric(ABC):
         if validate:
             pa.SeriesSchema(bool, nullable=False, unique=False).validate(y_pred)
 
+        if return_array:
+            return y_pred.to_numpy(dtype=bool, copy=False)
+
         return y_pred  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
     
     @staticmethod
     def get_float_y_pred(
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None,
-        mask: Optional[pd.Series] = None,
-        validate: bool = True
-        ) -> pd.Series:
-
+        mask: Optional[MaskLike] = None,
+        validate: bool = True,
+        return_array: bool = False,
+        ) -> pd.Series | np.ndarray:
         mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
+        colname = ComparisonMetric._resolve_col_name(df, ComparisonMetric.y_float_pred_cols, "y_pred")
 
-        for colname in ComparisonMetric.y_float_pred_cols:
-            if colname in df.columns:
-                y_pred = df[colname][mask]
-                break
+        if return_array:
+            y_pred_np = ComparisonMetric._masked_array(df[colname], mask).astype(float, copy=False)
+            if validate:
+                ComparisonMetric._validate_float_array(y_pred_np)
+            return y_pred_np
         else:
-            raise RuntimeError(f"Found no y_pred column in the provided dataframe. Recognized column names are: {ComparisonMetric.y_float_pred_cols}.")
+            y_pred = ComparisonMetric._masked_series(df[colname], mask)
 
-        if validate:
-            pa.SeriesSchema(float, nullable=False, unique=False).validate(y_pred)
+            if validate:
+                pa.SeriesSchema(float, nullable=False, unique=False).validate(y_pred)
 
-        return y_pred  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a float series
+            return y_pred
 
     def __repr__(self) -> str:
         return self.metric_name
@@ -329,7 +482,7 @@ class MetricWithAnalyticalCI(ComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True,
         return_ci: bool = False
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
@@ -340,12 +493,12 @@ class MetricWithAnalyticalCI(ComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         ci_alpha: float = 0.95,
         validate: bool = True,
-        y_true: Optional[pd.Series] = None,
-        y_pred: Optional[pd.Series] = None,
-        y_pred_prob: Optional[pd.Series] = None,        
+        y_true: Optional[pd.Series | np.ndarray] = None,
+        y_pred: Optional[pd.Series | np.ndarray] = None,
+        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
         return_val: Optional[bool] = False
         ) -> tuple[float, float] | tuple[int, tuple[float, float]] | tuple[float, tuple[float, float]]:
         raise NotImplementedError
@@ -358,7 +511,7 @@ class MetricWithAnalyticalVar(ComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True,
         return_var: bool = False
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
@@ -369,11 +522,11 @@ class MetricWithAnalyticalVar(ComparisonMetric):
         self, 
         df: pd.DataFrame, 
         group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[pd.Series] = None,
+        group_mask: Optional[MaskLike] = None,
         validate: bool = True,
-        y_true: Optional[pd.Series] = None,
-        y_pred: Optional[pd.Series] = None,
-        y_pred_prob: Optional[pd.Series] = None,        
+        y_true: Optional[pd.Series | np.ndarray] = None,
+        y_pred: Optional[pd.Series | np.ndarray] = None,
+        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
         return_val: Optional[bool] = False
         ) -> float | tuple[float, float] | tuple[int, float]:
         raise NotImplementedError
@@ -396,3 +549,4 @@ class ThresholdedComparisonMetric(ComparisonMetric):
 
         if threshold is not None:
             self.metric_name = f'{self.metric_name} (thr={threshold:.2g})'
+

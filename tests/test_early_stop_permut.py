@@ -11,7 +11,7 @@ import pytest
 import scipy
 from typing import cast
 
-import meval.stats as stats_mod
+import meval.stats as stats
 from meval.group_filter import GroupFilter
 from meval.metrics.ComparisonMetric import ComparisonMetric
 from meval.stats import _clopper_pearson_lower, studentized_permut_pval
@@ -51,11 +51,14 @@ def _run_with_mocked_studentized_samples(
 
         return 1.0, float(s_permut[idx])
 
-    def fake_shuffle_masks(mask_a, mask_b):
+    def fake_shuffle_masks(mask_a=None, mask_b=None, *, idces_joined=None, n_a=None, work_buffer=None):
+        if idces_joined is not None:
+            assert n_a is not None
+            return idces_joined[:n_a], idces_joined[n_a:]
         return mask_a, mask_b
 
-    monkeypatch.setattr(stats_mod, 'est_variance_of_metric_diff', fake_est_variance_of_metric_diff)
-    monkeypatch.setattr(stats_mod, 'shuffle_masks', fake_shuffle_masks)
+    monkeypatch.setattr(stats, 'est_variance_of_metric_diff', fake_est_variance_of_metric_diff)
+    monkeypatch.setattr(stats, 'shuffle_masks', fake_shuffle_masks)
 
     pval, _ = studentized_permut_pval(
         df=df,
