@@ -213,6 +213,40 @@ def test_get_multiclass_y_pred_prob_return_array_preserves_order():
     assert np.array_equal(got, expected)
 
 
+def test_get_multiclass_y_pred_return_array_from_y_pred_col():
+    df = pd.DataFrame(
+        {
+            "y_true": [0, 1, 2, 1],
+            "y_pred": [2, 1, 0, 1],
+        }
+    )
+    mask = np.array([0, 2, 3], dtype=np.int64)
+
+    got = ComparisonMetric.get_multiclass_y_pred(df, mask=mask, validate=True, return_array=True)
+
+    assert isinstance(got, np.ndarray)
+    assert got.dtype == int
+    assert np.array_equal(got, np.array([2, 0, 1]))
+
+
+def test_get_multiclass_y_pred_return_array_from_prob_cols():
+    df = pd.DataFrame(
+        {
+            "y_true": [0, 1, 2, 1],
+            "y_pred_prob_0": [0.1, 0.2, 0.8, 0.1],
+            "y_pred_prob_1": [0.7, 0.6, 0.1, 0.4],
+            "y_pred_prob_2": [0.2, 0.2, 0.1, 0.5],
+        }
+    )
+    mask = np.array([0, 1, 3], dtype=np.int64)
+
+    got = ComparisonMetric.get_multiclass_y_pred(df, mask=mask, validate=True, return_array=True)
+
+    assert isinstance(got, np.ndarray)
+    assert got.dtype == int
+    assert np.array_equal(got, np.array([1, 1, 2]))
+
+
 def test_mae_validate_false_uses_masked_array_in_call_and_variance(monkeypatch: pytest.MonkeyPatch):
     df = _build_df()
     mask = np.array([0, 2, 4], dtype=np.int64)

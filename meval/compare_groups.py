@@ -248,6 +248,11 @@ def compare_groups(df: pd.DataFrame,
             if isinstance(metric, ThresholdedComparisonMetric) and metric.threshold is None:
                 metric.set_threshold(threshold)
 
+    expanded_metrics = []
+    for metric in metrics:
+        expanded_metrics.extend(metric.resolve_metrics(df))
+    metrics = expanded_metrics
+
     run_parallel = settings.parallel and cpu_count() > 1
 
     if run_parallel and current_process().name == "MainProcess":

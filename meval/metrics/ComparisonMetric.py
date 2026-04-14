@@ -51,6 +51,12 @@ class ComparisonMetric(ABC):
         validate: bool = True
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
         raise NotImplementedError
+
+    def resolve_metrics(self, df: pd.DataFrame, validate: bool = True) -> list["ComparisonMetric"]:
+        # Most metrics map to one scalar output column. Metrics that need to
+        # expand into multiple scalar outputs (for example one per class) can
+        # override this method.
+        return [self]
     
     @staticmethod
     def _get_group_mask(
@@ -396,6 +402,54 @@ class ComparisonMetric(ABC):
             return y_pred.to_numpy(dtype=bool, copy=False)
 
         return y_pred  # type: ignore  - I don't know how to tell pandera that this thing is really guaranteed to be a bool series
+
+    @staticmethod
+    def get_multiclass_y_pred(
+            df: pd.DataFrame,
+            group_filter: Optional[GroupFilter] = None,
+            mask: Optional[MaskLike] = None,
+            validate: bool = True,
+            return_array: bool = False,
+            ) -> pd.Series | np.ndarray:
+
+        mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
+
+        if 'y_pred' in df.columns:
+            if return_array:
+                y_pred_np = np.asarray(ComparisonMetric._masked_array(df['y_pred'], mask))
+                if validate:
+                    ComparisonMetric._validate_int_array(y_pred_np)
+                return y_pred_np.astype(int, copy=False)
+
+            y_pred = ComparisonMetric._masked_series(df['y_pred'], mask)
+
+        else:
+            has_mc_prob_cols = any(col.startswith("y_pred_prob_") for col in df.columns)
+            if not has_mc_prob_cols:
+                raise RuntimeError("Expected multiclass predictions in either y_pred or y_pred_prob_{cls_id} columns.")
+            
+            y_pred_prob = ComparisonMetric.get_multiclass_y_pred_prob(
+                df,
+                mask=mask,
+                validate=validate,
+                return_array=True,
+            )
+            assert isinstance(y_pred_prob, np.ndarray)
+            class_cols = ComparisonMetric._get_sorted_multiclass_pred_prob_cols(df)
+            class_ids = np.array([int(col.replace("y_pred_prob_", "")) for col in class_cols], dtype=int)
+            y_pred_np = class_ids[np.argmax(y_pred_prob, axis=1)]
+
+            if return_array:
+                if validate:
+                    ComparisonMetric._validate_int_array(y_pred_np)
+                return y_pred_np
+
+            y_pred = pd.Series(y_pred_np, copy=False)
+
+        if validate:
+            pa.SeriesSchema(int, nullable=False, unique=False).validate(y_pred)
+
+        return y_pred  # type: ignore
     
     @staticmethod
     def get_float_y_pred(
