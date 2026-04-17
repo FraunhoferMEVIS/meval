@@ -54,6 +54,11 @@ def _choose_auto_method(y_true_np: np.ndarray, y_pred_prob_np: np.ndarray) -> st
     pos_scores = y_pred_prob_np[y_true_np]
     neg_scores = y_pred_prob_np[~y_true_np]
 
+    if pos_scores.size == 0 or neg_scores.size == 0:
+        # does not really matter; both methods should hardcode nan for this case.
+        # We need to explicitly catch this though because the next if clause will fail in this case.
+        return "newcombe"
+
     # Perfect separation = DeLong really bad
     # https://doi.org/10.1177/0962280215602040
     if pos_scores.min() > neg_scores.max():

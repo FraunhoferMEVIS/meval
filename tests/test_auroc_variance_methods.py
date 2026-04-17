@@ -67,3 +67,26 @@ def test_get_variance_auto_small_group_prefers_newcombe(monkeypatch):
 
     assert np.isfinite(auc)
     assert np.isfinite(var)
+
+
+def test_get_variance_auto_one_class_does_not_crash(monkeypatch):
+    n = 60
+    df = _make_binary_df(
+        y_true=[1] * n,
+        y_pred_prob=np.linspace(0.1, 0.9, n).tolist(),
+    )
+
+    auc, var = AUROC().get_variance(df, method="auto", return_val=True)
+
+    assert np.isnan(auc)
+    assert np.isnan(var)
+
+    auc, var = AUROC().get_variance(df, method="newcombe", return_val=True)
+
+    assert np.isnan(auc)
+    assert np.isnan(var)
+
+    auc, var = AUROC().get_variance(df, method="delong", return_val=True)
+
+    assert np.isnan(auc)
+    assert np.isnan(var)
