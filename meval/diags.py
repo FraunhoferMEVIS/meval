@@ -963,10 +963,12 @@ def plot_metric_overview(
                          for idx, group_name in enumerate(plot_groups)}
 
     plot_idx = 0
+    metric_subplot_positions: list[tuple[int, int]] = []
     
     for metric in plot_metrics:
         row = (plot_idx // cols) + 1
         col = (plot_idx % cols) + 1
+        metric_subplot_positions.append((row, col))
         
         traces = metric_plot(
             metric, 
@@ -988,8 +990,6 @@ def plot_metric_overview(
             row=row, 
             col=col,
         )
-
-        fig.update_xaxes(visible=False, row=row, col=col)
 
         plot_idx += 1
 
@@ -1015,6 +1015,23 @@ def plot_metric_overview(
                 fig.update_yaxes(**layout_kwargs['yaxis'], row=row, col=col)
 
                 plot_idx += 1
+
+    if metric_subplot_positions:
+        last_metric_row = max(row for row, _ in metric_subplot_positions)
+        for row, col in metric_subplot_positions:
+            if row < last_metric_row:
+                fig.update_xaxes(showticklabels=False, row=row, col=col)
+            else:
+                fig.update_xaxes(
+                    showticklabels=True,
+                    tickangle=45,
+                    tickmode="array",
+                    tickvals=list(range(len(plot_groups))),
+                    ticktext=list(plot_groups),
+                    automargin=True,
+                    row=row,
+                    col=col,
+                )
 
     if 'Count' in metric_results_df:
         row = (plot_idx // cols) + 1
