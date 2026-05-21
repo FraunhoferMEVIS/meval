@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from os import PathLike, fspath
 from typing import Optional, Sequence
 import math
 import numpy as np
@@ -25,6 +26,9 @@ from .metrics._metrics import (
 from .metrics.ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, ThresholdedComparisonMetric
 from .metrics.Count import Count
 from .stats import ci_nan_quantile
+
+
+FilePath = str | PathLike[str]
 
 default_layout = {
     "template": "plotly_white",
@@ -78,11 +82,13 @@ def _ensure_kaleido_chrome() -> None:
 
 def process_export_file(
         fig: go.Figure, 
-        export_file: str, 
+        export_file: FilePath, 
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,         
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
         dpi = 600
         ) -> None:
+
+    export_file = fspath(export_file)
     
     if export_file.endswith(".html"):
         if export_fig_size_in is not None or export_fig_size_cm is not None:
@@ -130,10 +136,13 @@ def process_export_file(
 
 
 def validate_plot_args(
-        export_fig_path: Optional[str], 
+        export_fig_path: Optional[FilePath], 
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> None:
+
+    if export_fig_path is not None:
+        export_fig_path = fspath(export_fig_path)
     
     if export_fig_path is not None and export_fig_path.endswith(".html"):
         if export_fig_size_in is not None or export_fig_size_cm is not None:
@@ -148,7 +157,7 @@ def metric_plot(
         cmap: Optional[Sequence[str]] = None, 
         sort_groups_by_metric: bool = True,
         figure: bool = True,
-        export_fig_path: Optional[str] = None, 
+    export_fig_path: Optional[FilePath] = None, 
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
         return_group_color_dict: bool = False
@@ -328,7 +337,7 @@ def rel_diag(
         cmap: Optional[Sequence[str]] = None,
         legend: bool = True, 
         threshold: Optional[float] = None,
-        export_fig_path: Optional[str] = None, 
+    export_fig_path: Optional[FilePath] = None, 
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
         log_density: bool = True
@@ -611,7 +620,7 @@ def roc_diag(
         group_color_dict: Optional[dict[str, str]] = None,
         legend: bool = True,
         threshold: Optional[float] = None,
-        export_fig_path: Optional[str] = None,
+    export_fig_path: Optional[FilePath] = None,
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
@@ -692,7 +701,7 @@ def pr_diag(
         group_color_dict: Optional[dict[str, str]] = None,
         legend: bool = True,
         threshold: Optional[float] = None,
-        export_fig_path: Optional[str] = None,
+    export_fig_path: Optional[FilePath] = None,
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
@@ -829,7 +838,7 @@ def prg_diag(
         legend: bool = True,
         threshold: Optional[float] = None,
         rec_gain_min: float = 0,
-        export_fig_path: Optional[str] = None,
+    export_fig_path: Optional[FilePath] = None,
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,   
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
@@ -924,7 +933,7 @@ def plot_metric_overview(
         plot_groups: Sequence[str],
         test_df: Optional[pd.DataFrame] = None, 
         add_risk_plot: bool = False,
-        export_fig_path: Optional[str] = None, 
+    export_fig_path: Optional[FilePath] = None, 
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None, 
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None, 
         log_density: bool = True,
@@ -1155,7 +1164,7 @@ def volcano_plot(
         metric: ComparisonMetric,
         fig_title: Optional[str] = None,
         figure: bool = True,
-        export_fig_path: Optional[str] = None, 
+    export_fig_path: Optional[FilePath] = None, 
         export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
         export_fig_size_in: Optional[tuple[float | int, float | int]] = None
         ) -> go.Figure | list[BaseTraceType]:

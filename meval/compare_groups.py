@@ -1,5 +1,6 @@
 import itertools
 import inspect
+from os import PathLike, fspath
 import time
 import warnings
 from multiprocessing import Pool, cpu_count, current_process, get_start_method
@@ -18,6 +19,9 @@ from .group_filter import GroupFilter, find_binary_complements
 from .select_groups import select_extreme_tested_groups
 from .stats import bootstrap_ci, studentized_permut_pval
 from .reporting import generate_report_file
+
+
+FilePath = str | PathLike[str]
 
 
 def calc_metric(df: pd.DataFrame, 
@@ -122,7 +126,7 @@ def compare_groups(df: pd.DataFrame,
                    group_by: Optional[str | Collection[str]] = None, 
                    group_interactions: None | int = None,
                    min_subgroup_size: int = 20,  # ignored if analysis_groups are provided
-                   report_file: Optional[str] = None, 
+                   report_file: Optional[FilePath] = None, 
                    add_all_group: bool = True,
                    threshold: Optional[float] = None,
                    max_plot_groups: int = 12,
@@ -381,6 +385,7 @@ def compare_groups(df: pd.DataFrame,
             add_all_group=True)
 
     if report_file is not None:
+        report_file = fspath(report_file)
         if report_file.endswith(".html"):
             start_time = time.time()
             print(f"Report will be written to {report_file}.")
