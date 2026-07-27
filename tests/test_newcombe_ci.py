@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from meval.stats import newcombe_auroc_ci
+from meval.stats.confidence_intervals import newcombe_auroc_ci
 import pytest
 
 

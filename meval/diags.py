@@ -25,7 +25,7 @@ from .metrics._metrics import (
 )
 from .metrics.ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, ThresholdedComparisonMetric
 from .metrics.Count import Count
-from .stats import ci_nan_quantile
+from .stats.utils import ci_nan_quantile
 
 
 FilePath = str | PathLike[str]

@@ -11,10 +11,10 @@ import pytest
 import scipy
 from typing import cast
 
-import meval.stats as stats
+import meval.stats.studentized_permut_pval as stats_pval
 from meval.group_filter import GroupFilter
 from meval.metrics.ComparisonMetric import ComparisonMetric
-from meval.stats import _clopper_pearson_lower, studentized_permut_pval
+from meval.stats.studentized_permut_pval import _clopper_pearson_lower, studentized_permut_pval
 
 
 def _minimal_df_and_filter() -> tuple[pd.DataFrame, GroupFilter]:
@@ -57,8 +57,8 @@ def _run_with_mocked_studentized_samples(
             return idces_joined[:n_a], idces_joined[n_a:]
         return mask_a, mask_b
 
-    monkeypatch.setattr(stats, 'est_variance_of_metric_diff', fake_est_variance_of_metric_diff)
-    monkeypatch.setattr(stats, 'shuffle_masks', fake_shuffle_masks)
+    monkeypatch.setattr(stats_pval, 'est_variance_of_metric_diff', fake_est_variance_of_metric_diff)
+    monkeypatch.setattr(stats_pval, 'shuffle_masks', fake_shuffle_masks)
 
     pval, _ = studentized_permut_pval(
         df=df,

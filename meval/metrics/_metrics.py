@@ -7,7 +7,7 @@ from typing import Optional, Literal
 
 from .._array_types import BoolArray, FloatArray, LabelArray
 from ..config import settings
-from ..stats import bootstrap_curve
+from ..stats.bootstrap import bootstrap_curve
 
 
 def get_confusion_matrix(target: LabelArray, preds: LabelArray | FloatArray, threshold: Optional[float] = None) -> tuple[int, int, int, int]:

@@ -12,7 +12,7 @@ from ..diags import roc_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
 from ..config import settings
-from ..stats import newcombe_auroc_ci
+from ..stats.confidence_intervals import newcombe_auroc_ci
 
 
 def _fast_binary_auroc_with_min_cases(

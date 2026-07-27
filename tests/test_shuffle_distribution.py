@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 from meval.config import settings
-from meval.stats import RandomState, shuffle_masks, shuffle_masks_from_state
+from meval.stats.bootstrap import RandomState
+from meval.stats.studentized_permut_pval import shuffle_masks, shuffle_masks_from_state
 
 def _legacy_shuffle_from_state(idces_joined: np.ndarray, n_a: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     idces_permuted = rng.permutation(idces_joined)

@@ -17,7 +17,8 @@ from .config import settings
 from .metrics.ComparisonMetric import ComparisonMetric, MetricWithAnalyticalCI, ThresholdedComparisonMetric
 from .group_filter import GroupFilter, find_binary_complements
 from .select_groups import select_extreme_tested_groups
-from .stats import bootstrap_ci, studentized_permut_pval
+from .stats.confidence_intervals import bootstrap_ci
+from .stats.studentized_permut_pval import studentized_permut_pval
 from .reporting import generate_report_file
 
 

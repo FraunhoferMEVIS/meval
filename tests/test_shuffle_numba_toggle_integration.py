@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 import scipy.stats
-from meval.stats import studentized_permut_pval, RandomState
+from meval.stats.bootstrap import RandomState
+from meval.stats.studentized_permut_pval import studentized_permut_pval
 from meval.metrics import Average
 from meval.config import settings
 from meval.group_filter import GroupFilter

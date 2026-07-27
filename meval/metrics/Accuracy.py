@@ -6,7 +6,7 @@ from statsmodels.stats.proportion import proportion_confint
 from ._metrics import accuracy
 from .ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar, MetricWithAnalyticalCI, ThresholdedComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
-from ..stats import variance_of_proportion
+from ..stats.confidence_intervals import variance_of_proportion
 
 
 class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithAnalyticalCI):

@@ -13,8 +13,6 @@ from .Recall import Recall
 from .Specificity import Specificity
 from .ThresholdSelection import thresh_tune
 
-__version__ = "0.2.0"
-
 __all__ = [
     "Accuracy",
     "Average",
