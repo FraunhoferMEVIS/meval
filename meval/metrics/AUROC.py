@@ -43,6 +43,27 @@ def _to_binary_arrays(
     return y_true_np, y_pred_prob_np
 
 
+def _has_only_hard_binary_predictions(y_pred_prob: pd.Series | np.ndarray) -> bool:
+    y_pred_prob_np = np.asarray(y_pred_prob, dtype=float)
+    finite_values = y_pred_prob_np[np.isfinite(y_pred_prob_np)]
+
+    if finite_values.size == 0:
+        return False
+
+    unique_values = np.unique(finite_values)
+    return bool(np.all(np.isin(unique_values, [0.0, 1.0])))
+
+
+def _raise_if_hard_binary_predictions(y_pred_prob: pd.Series | np.ndarray) -> None:
+    if _has_only_hard_binary_predictions(y_pred_prob):
+        raise ValueError(
+            "AUROC requires continuous score/probability predictions, but the provided "
+            "y_pred_prob values are purely 0/1. This looks like hard class predictions. "
+            "Use Accuracy or Specificity/Recall or provide score/probability "
+            "predictions for AUROC."
+        )
+
+
 def _choose_auto_method(y_true_np: np.ndarray, y_pred_prob_np: np.ndarray) -> str:
     n_samples = y_true_np.shape[0]
 
@@ -81,6 +102,10 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
             is_descriptive=False,
             test=test
         )
+
+    def check_suspicious_usage(self, df: pd.DataFrame) -> None:
+        y_pred_prob_np = self.get_binary_y_pred_prob(df, validate=False, return_array=True)
+        _raise_if_hard_binary_predictions(y_pred_prob_np)
 
     def __call__(
         self, 

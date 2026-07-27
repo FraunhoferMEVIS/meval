@@ -11,6 +11,12 @@ except ImportError:  # pragma: no cover
     numba = None
 
 
+# Numba can be importable but still unusable at runtime (e.g. broken install or
+# incompatible dependency graph). Keep a process-local switch to disable JIT path
+# after the first runtime failure and use the pure NumPy fallback instead.
+_NUMBA_RUNTIME_AVAILABLE = numba is not None
+
+
 def _as_binary(y_true: LabelArray) -> FloatArray:
     return (np.asarray(y_true) == 1).astype(float)
 
@@ -147,7 +153,9 @@ def fast_numba_auc(
     y_score: FloatArray,
     sample_weight: Optional[FloatArray] = None,
 ) -> float:
-    if numba is None:
+    global _NUMBA_RUNTIME_AVAILABLE
+
+    if not _NUMBA_RUNTIME_AVAILABLE:
         result = fast_auc(y_true=y_true, y_score=y_score, sample_weight=sample_weight)
         return np.nan if isinstance(result, str) else float(result)
 
@@ -159,18 +167,23 @@ def fast_numba_auc(
     y_true_arr = y_true_arr[desc_score_indices]
     y_bin = (y_true_arr == 1)
 
-    if sample_weight is None:
-        pos_count = y_bin.sum()
-        if pos_count == 0 or pos_count == len(y_bin):
-            return np.nan
-        return float(_fast_numba_auc_nonw(y_true=y_true_arr, y_score=y_score_arr))
+    try:
+        if sample_weight is None:
+            pos_count = y_bin.sum()
+            if pos_count == 0 or pos_count == len(y_bin):
+                return np.nan
+            return float(_fast_numba_auc_nonw(y_true=y_true_arr, y_score=y_score_arr))
 
-    sample_weight_arr = np.asarray(sample_weight, dtype=float)[desc_score_indices]
-    pos_weight = np.sum(sample_weight_arr * y_bin)
-    neg_weight = np.sum(sample_weight_arr * (1 - y_bin))
-    if pos_weight <= 0 or neg_weight <= 0:
-        return np.nan
-    return float(_fast_numba_auc_w(y_true=y_true_arr, y_score=y_score_arr, sample_weight=sample_weight_arr))
+        sample_weight_arr = np.asarray(sample_weight, dtype=float)[desc_score_indices]
+        pos_weight = np.sum(sample_weight_arr * y_bin)
+        neg_weight = np.sum(sample_weight_arr * (1 - y_bin))
+        if pos_weight <= 0 or neg_weight <= 0:
+            return np.nan
+        return float(_fast_numba_auc_w(y_true=y_true_arr, y_score=y_score_arr, sample_weight=sample_weight_arr))
+    except Exception:
+        _NUMBA_RUNTIME_AVAILABLE = False
+        result = fast_auc(y_true=y_true, y_score=y_score, sample_weight=sample_weight)
+        return np.nan if isinstance(result, str) else float(result)
 
 
 def fast_ovo_auc(

@@ -1,7 +1,11 @@
+import warnings
 import numpy as np
 import pandas as pd
 import pytest
 
+from meval import compare_groups
+from meval.config import settings
+from meval.metrics.AUROC import AUROC
 from meval.metrics.ComparisonMetric import ComparisonMetric
 from meval.metrics.MAE import MAE
 from meval.metrics.Accuracy import Accuracy
@@ -277,3 +281,75 @@ def test_mae_validate_false_uses_masked_array_in_call_and_variance(monkeypatch: 
 
     # Two masked array reads (y_true, y_pred) per public method call.
     assert calls["n"] >= 4
+
+
+def test_compare_groups_warns_when_mae_is_used_on_binary_classification_like_inputs():
+    old_settings = settings.to_dict().copy()
+    try:
+        settings.load_testing_config(parallel=False)
+
+        df = pd.DataFrame(
+            {
+                "y_true": [0.0, 1.0, 1.0, 0.0],
+                "y_pred": [0.1, 0.8, 0.7, 0.2],
+            }
+        )
+
+        with pytest.warns(UserWarning, match="MAE was requested on data with binary 0/1 y_true"):
+            results_df, _ = compare_groups(df=df, metrics=[MAE()], min_subgroup_size=1)
+
+        assert "MAE" in results_df.columns
+    finally:
+        settings.from_dict(old_settings)
+
+
+def test_compare_groups_does_not_warn_for_mae_on_nonbinary_targets():
+    old_settings = settings.to_dict().copy()
+    try:
+        settings.load_testing_config(parallel=False)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            compare_groups(df=_build_df(), metrics=[MAE()], min_subgroup_size=1)
+
+        assert not any("MAE was requested on data with binary 0/1 y_true" in str(w.message) for w in caught)
+    finally:
+        settings.from_dict(old_settings)
+
+
+def test_auroc_direct_calls_allow_hard_binary_predictions_without_preflight_check():
+    df = pd.DataFrame(
+        {
+            "y_true": [False, True, True, False],
+            "y_pred_prob": [0.0, 1.0, 1.0, 0.0],
+        }
+    )
+
+    metric = AUROC()
+
+    assert metric(df) == pytest.approx(1.0)
+
+    ci = metric.get_ci(df, method="newcombe")
+    variance = metric.get_variance(df, method="newcombe")
+
+    assert isinstance(ci, tuple)
+    assert len(ci) == 2
+    assert np.isfinite(variance)
+
+
+def test_compare_groups_raises_for_auroc_on_hard_binary_predictions():
+    old_settings = settings.to_dict().copy()
+    try:
+        settings.load_testing_config(parallel=False)
+
+        df = pd.DataFrame(
+            {
+                "y_true": [False, True, True, False],
+                "y_pred_prob": [0.0, 1.0, 1.0, 0.0],
+            }
+        )
+
+        with pytest.raises(ValueError, match="AUROC requires continuous score/probability predictions"):
+            compare_groups(df=df, metrics=[AUROC()], min_subgroup_size=1)
+    finally:
+        settings.from_dict(old_settings)

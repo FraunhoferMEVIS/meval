@@ -57,6 +57,9 @@ class ComparisonMetric(ABC):
         # expand into multiple scalar outputs (for example one per class) can
         # override this method.
         return [self]
+
+    def check_suspicious_usage(self, df: pd.DataFrame) -> None:
+        return None
     
     @staticmethod
     def _get_group_mask(

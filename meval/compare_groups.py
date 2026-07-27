@@ -257,6 +257,9 @@ def compare_groups(df: pd.DataFrame,
         expanded_metrics.extend(metric.resolve_metrics(df))
     metrics = expanded_metrics
 
+    for metric in metrics:
+        metric.check_suspicious_usage(df)
+
     run_parallel = settings.parallel and cpu_count() > 1
 
     if run_parallel and current_process().name == "MainProcess":

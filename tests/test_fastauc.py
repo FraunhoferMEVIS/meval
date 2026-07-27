@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from sklearn.metrics import roc_auc_score
 
+import meval.metrics.fastauc as fastauc_mod
 from meval.metrics.fastauc import fast_auc, fast_numba_auc, fast_ovo_auc, fast_ovo_auc_numba
 
 
@@ -94,3 +95,23 @@ def test_fastauc_ovo_two_classes_returns_nan():
 
     assert np.isnan(fast_ovo_auc(y_true, y_score))
     assert np.isnan(fast_ovo_auc_numba(y_true, y_score))
+
+
+def test_fast_numba_auc_falls_back_on_numba_runtime_error(monkeypatch):
+    y_true = np.array([0, 1, 0, 1, 1, 0], dtype=int)
+    y_score = np.array([0.1, 0.9, 0.3, 0.7, 0.8, 0.2], dtype=float)
+    expected = fast_auc(y_true, y_score)
+
+    old_runtime_available = fastauc_mod._NUMBA_RUNTIME_AVAILABLE
+    monkeypatch.setattr(fastauc_mod, "_NUMBA_RUNTIME_AVAILABLE", True)
+
+    def _raise_numba_core_error(*args, **kwargs):
+        raise AttributeError("module 'numba' has no attribute 'core'")
+
+    monkeypatch.setattr(fastauc_mod, "_fast_numba_auc_nonw", _raise_numba_core_error)
+
+    result = fast_numba_auc(y_true, y_score)
+    _assert_close_or_nan(result, expected)
+    assert fastauc_mod._NUMBA_RUNTIME_AVAILABLE is False
+
+    monkeypatch.setattr(fastauc_mod, "_NUMBA_RUNTIME_AVAILABLE", old_runtime_available)

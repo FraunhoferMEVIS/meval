@@ -1,3 +1,4 @@
+import warnings
 from typing import Optional
 import numpy as np
 import pandas as pd
@@ -17,6 +18,40 @@ class MAE(MetricWithAnalyticalVar):
             is_descriptive=False,
             test=test
         )
+
+    @staticmethod
+    def _looks_like_binary_classification_inputs(
+        y_true_np: np.ndarray,
+        y_pred_np: np.ndarray,
+    ) -> bool:
+        finite_y_true = y_true_np[np.isfinite(y_true_np)]
+        finite_y_pred = y_pred_np[np.isfinite(y_pred_np)]
+
+        if finite_y_true.size == 0 or finite_y_pred.size == 0:
+            return False
+
+        unique_y_true = np.unique(finite_y_true)
+        return bool(
+            np.all(np.isin(unique_y_true, [0.0, 1.0]))
+            and np.all((finite_y_pred >= 0.0) & (finite_y_pred <= 1.0))
+        )
+
+    def check_suspicious_usage(self, df: pd.DataFrame) -> None:
+        try:
+            y_true_np = np.asarray(self.get_float_y_true(df, validate=False, return_array=True), dtype=float)
+            y_pred_np = np.asarray(self.get_float_y_pred(df, validate=False, return_array=True), dtype=float)
+        except Exception:
+            return
+
+        if self._looks_like_binary_classification_inputs(y_true_np, y_pred_np):
+            warnings.warn(
+                "MAE was requested on data with binary 0/1 y_true and y_pred values in [0, 1]. "
+                "meval allows this because MAE treats inputs as numeric regression targets, "
+                "but for binary classification Accuracy or BrierScore is usually more appropriate; "
+                "AUROC is only appropriate when you have continuous score/probability predictions.",
+                UserWarning,
+                stacklevel=3,
+            )
 
     def __call__(
         self, 
