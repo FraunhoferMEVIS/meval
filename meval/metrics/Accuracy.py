@@ -1,12 +1,11 @@
 from typing import Optional
 import pandas as pd
 import numpy as np
-from statsmodels.stats.proportion import proportion_confint
 
 from ._metrics import accuracy
 from .ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar, MetricWithAnalyticalCI, ThresholdedComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
-from ..stats.confidence_intervals import variance_of_proportion
+from ..stats.confidence_intervals import variance_of_proportion, proportion_confint
 
 
 class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithAnalyticalCI):
@@ -107,15 +106,7 @@ class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithA
         ci: tuple[float, float]
         ci = proportion_confint(count=int((y_true_np == y_pred_np).sum()), nobs=len(y_true_np), alpha=1-ci_alpha, method="wilson") # type: ignore
 
-        assert 0 <= ci[0] <= 1
-        assert 0 <= ci[1] <= 1
-        assert ci[0] <= ci[1]
-
         if return_val:
             return accuracy(y_true_np, y_pred_np), ci
         else:
             return ci 
-
-
-
-

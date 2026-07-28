@@ -1,6 +1,7 @@
 
 import numpy as np
 import scipy
+from statsmodels.stats.proportion import proportion_confint as sm_proportion_confint
 import pandas as pd
 
 from .bootstrap import bootstrap_metric
@@ -63,3 +64,27 @@ def newcombe_auroc_ci(auroc_val: float, y_true: pd.Series | LabelArray, ci_alpha
         ub = 1.0
 
     return [lb, ub]
+
+
+def _clamp_ci(ci: tuple[float, float]) -> tuple[float, float]:
+    """
+    Clamp a (lower, upper) confidence interval into [0, 1].
+
+    Some statsmodels.stats.proportion.proportion_confint methods (e.g.
+    "wilson") can return a bound a few ULPs outside [0, 1] due to floating-point
+    rounding at the 0%/100% boundary, even though the true interval is
+    mathematically guaranteed to lie within [0, 1].
+    """
+    lower, upper = ci
+    return (max(0.0, lower), min(1.0, upper))
+
+
+def proportion_confint(count: int, nobs: int, alpha: float = 0.05, method: str = "wilson"):
+    ci: tuple[float, float]
+    ci = sm_proportion_confint(count=count, nobs=nobs, alpha=alpha, method=method)
+
+    assert -1e-6 <= ci[0] <= 1+1e-6, "Only floating-point rounding errors should cause CIs to be outside [0, 1]."
+    assert -1e-6 <= ci[1] <= 1+1e-6, "Only floating-point rounding errors should cause CIs to be outside [0, 1]."
+    assert ci[0] <= ci[1]
+
+    return _clamp_ci(ci)
