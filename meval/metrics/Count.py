@@ -14,6 +14,7 @@ class Count(ComparisonMetric):
             needs_all_classes=False,
             reference_class='self',
             is_descriptive=True,
+            direction="N/A",
             test=test
         )
 

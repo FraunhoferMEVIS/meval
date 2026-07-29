@@ -133,8 +133,9 @@ def compare_groups(df: pd.DataFrame,
                    max_plot_groups: int = 12,
                    analysis_groups: Optional[Collection[str]] = None,
                    plot_groups: Optional[Sequence[str]] = None,
-                   test_correction_method: str = "fdr_bh"  # assumes non-negatively related tests
-                   ) -> tuple[pd.DataFrame, list[str]]:
+                   test_correction_method: str = "fdr_bh",  # assumes non-negatively related tests
+                   return_metric_objs: bool = False,  # if True, also return the resolved (post-per-class-expansion) list of ComparisonMetric objects actually evaluated, in output column order - each carries .metric_name, .is_descriptive, .direction, and (for per-class metrics) .class_id, so callers don't need to re-derive these from metric_name strings.
+                   ) -> tuple[pd.DataFrame, list[str]] | tuple[pd.DataFrame, list[str], list[ComparisonMetric]]:
     # df should contain group vars, score/performance metrics, any additional metadata that are available
     # group_interactions = (None, int - interaction levels). If None or 0, only top-level groups are compared.
     # If group_by is None, no stratification is performed, i.e., analyses are only performed over the whole test population
@@ -332,6 +333,38 @@ def compare_groups(df: pd.DataFrame,
 
         all_metric_results_df = pd.concat(metric_results_dfs, axis=1).sort_index()
 
+    # Column order is only guaranteed to match input metric order for the
+    # sequential path by construction (metric_results_dfs is built by
+    # iterating `metrics` in order, then concatenated along axis=1). The
+    # parallel path collects results via pool.imap_unordered() - which
+    # returns results in *completion* order, not submission order - then
+    # reassembles them via groupby(...).first(), so nothing guarantees
+    # column order survives intact there. Reorder columns to match input
+    # metric order explicitly rather than relying on incidental ordering
+    # from the underlying concat/groupby: callers that infer anything from
+    # column position (e.g. "the first configured metric is the primary
+    # one") depend on this holding, for both the parallel and sequential paths.
+    #
+    # Each metric's own columns are looked up by their exact names (not
+    # inferred via string prefix-matching, which breaks whenever one
+    # metric's name is a prefix of another's, e.g. "Acc" vs "Acc (thr=0.5)").
+    ordered_columns = []
+    for metric in metrics:
+        for candidate in (
+            metric.metric_name,
+            metric.metric_name_low,
+            metric.metric_name_high,
+            metric.metric_name_pval,
+            metric.metric_name_effect,
+        ):
+            if candidate in all_metric_results_df.columns and candidate not in ordered_columns:
+                ordered_columns.append(candidate)
+    # Anything not associated with a specific metric (shouldn't normally
+    # happen, but don't silently drop columns if it does) goes at the end,
+    # in whatever order it already had.
+    ordered_columns += [col for col in all_metric_results_df.columns if col not in ordered_columns]
+    all_metric_results_df = all_metric_results_df[ordered_columns]
+
     for metric in metrics:
         if not metric.test:
             if metric.metric_name_pval in all_metric_results_df.columns:
@@ -403,6 +436,8 @@ def compare_groups(df: pd.DataFrame,
         else:
             raise ValueError("Unsupported file format. Use .html extension only.")
 
+    if return_metric_objs:
+        return all_metric_results_df, plot_groups, metrics
     return all_metric_results_df, plot_groups
 
     

@@ -22,6 +22,7 @@ class DRMSCE(CurveBasedComparisonMetric):
             reference_class = 'self',
             needs_all_classes = False,
             is_descriptive = False,
+            direction="minimize",
             test=test
         )
 

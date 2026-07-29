@@ -15,7 +15,12 @@ class ProportionOfPos(ComparisonMetric):
             metric_name='p(y=1|G=g)',
             reference_class='self',
             needs_all_classes=False,
+            # The is_descriptive choice is debatable.
+            # Treating it as inferred (non-descriptive) here, as it might be considered an inference of
+            # the true subgroup population base rate.
+            # (Setting is_descriptive=True results in slightly different handling, e.g. no CIs will ever be computed, etc.)
             is_descriptive=False,
+            direction="N/A",
             test=test
         )
 
@@ -61,6 +66,7 @@ class _PerClassProportionOfPos(ComparisonMetric):
             reference_class='self',
             needs_all_classes=False,
             is_descriptive=False,
+            direction="N/A",
             test=test
         )
 

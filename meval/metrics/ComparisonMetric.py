@@ -25,6 +25,16 @@ class ComparisonMetric(ABC):
     needs_all_classes: bool
     is_descriptive: bool
     test: bool
+    # Whether a higher or lower value indicates better model performance -
+    # "maximize" (e.g. AUROC, Accuracy, Recall), "minimize" (e.g. MAE,
+    # BrierScore - error/loss-style metrics), or "N/A" for metrics with no
+    # inherent performance direction (e.g. Count, ProportionOfPos, which
+    # describe the data/predictions rather than score them; or Average,
+    # which wraps an arbitrary caller-provided column and can't know its
+    # semantics). Consumers that need to flag over/under-performing
+    # subgroups (e.g. relative to the overall population) can use this
+    # instead of guessing from the metric name.
+    direction: str
 
     def __init__(
             self,
@@ -33,14 +43,18 @@ class ComparisonMetric(ABC):
             reference_class: str,
             needs_all_classes: bool,
             is_descriptive: bool,
-            test: bool = False
+            test: bool = False,
+            direction: str = "N/A"
     ):
+        assert direction in ("maximize", "minimize", "N/A"), \
+            f"direction must be one of 'maximize', 'minimize', 'N/A', got {direction!r}"
         self.req_cols = req_cols
         self.metric_name = metric_name
         self.reference_class = reference_class
         self.needs_all_classes = needs_all_classes
         self.is_descriptive = is_descriptive
         self.test = test
+        self.direction = direction
 
     @abstractmethod
     def __call__(
@@ -511,13 +525,15 @@ class CurveBasedComparisonMetric(ComparisonMetric):
             reference_class: str,
             needs_all_classes: bool,
             is_descriptive: bool,
-            test: bool = False
+            test: bool = False,
+            direction: str = "N/A"
     ):
         super().__init__(req_cols=req_cols,
                          metric_name=metric_name,
                          reference_class=reference_class,
                          needs_all_classes=needs_all_classes,
                          is_descriptive=is_descriptive,
+                         direction=direction,
                          test=test)
 
     @abstractmethod

@@ -7,13 +7,19 @@ from ..group_filter import GroupFilter
 
 class Average(MetricWithAnalyticalVar):
 
-    def __init__(self, metric_col, test: bool = False):
+    def __init__(self, metric_col, test: bool = False, direction: str = "N/A"):
+        # Average() wraps an arbitrary caller-provided column (e.g. a
+        # per-sample margin, error, or custom score), so unlike most other
+        # metrics it can't infer a sensible "maximize"/"minimize" direction
+        # from its own definition - callers who know what metric_col means
+        # can pass direction explicitly, e.g. Average("margin", direction="maximize").
         super().__init__(
             req_cols=[metric_col],
             metric_name="Avg(" + metric_col + ")",
             reference_class="self",
             needs_all_classes=False,
             is_descriptive=False,
+            direction=direction,
             test=test
         )
         self.metric_col = metric_col

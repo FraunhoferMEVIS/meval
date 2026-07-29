@@ -18,6 +18,7 @@ class Specificity(ThresholdedComparisonMetric):
             reference_class='self',
             needs_all_classes=False,
             is_descriptive=False,
+            direction="maximize",
             test=test
         )
 

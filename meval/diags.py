@@ -947,7 +947,17 @@ def plot_metric_overview(
             if isinstance(metric, ThresholdedComparisonMetric) and metric.threshold is None:
                 metric.set_threshold(threshold)
 
-    plot_metrics = [metric for metric in metrics if not isinstance(metric, Count)]
+    # Descriptive metrics (e.g. Sample Count) don't have CI/(low)/
+    # (high) columns (see calc_metric in compare_groups.py), so they can't
+    # be plotted through the main per-metric loop below the same way as
+    # scored metrics. 
+    #
+    # Count specifically still gets its own dedicated bar-chart subplot
+    # below (the "if 'Count' in metric_results_df:" block), appended after
+    # the main loop - num_subplots must still reserve a slot for that, so
+    # it's computed from the original (unfiltered) metrics/CurveBasedComparisonMetric
+    # count, not from plot_metrics.
+    plot_metrics = [metric for metric in metrics if not metric.is_descriptive]
     if test_df is None:
         num_subplots = len(metrics)
     else:

@@ -22,6 +22,7 @@ class MultiClassAUROC(ComparisonMetric):
             reference_class="self",  # ?????? https://proceedings.neurips.cc/paper_files/paper/2019/file/73e0f7487b8e5297182c5a711d20bf26-Paper.pdf
             needs_all_classes=True if auroc_type.lower() == "ovo" else False,
             is_descriptive=False,
+            direction="maximize",
             test=test
         )
         self.multiclass_mode: Literal['ovo', 'ovr'] = cast(Literal['ovo', 'ovr'], auroc_type.lower())

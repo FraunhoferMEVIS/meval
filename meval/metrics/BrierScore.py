@@ -16,6 +16,7 @@ class BrierScore(ComparisonMetric):
             reference_class='self',
             needs_all_classes=True if balanced else False,
             is_descriptive=False,
+            direction="minimize",
             test=test
         )
         self.balanced = balanced
