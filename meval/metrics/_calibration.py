@@ -1,13 +1,20 @@
-from typing import List, Tuple, TypeVar, Sequence
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, TypeVar, Sequence
 from warnings import warn
 
 import numpy as np
 import pandas as pd
 import scipy.interpolate
 import scipy.signal
+import scipy.stats
+import statsmodels.api as sm
 from scipy.interpolate import PchipInterpolator
+from scipy.special import expit, logit as scipy_logit
 from sklearn.isotonic import IsotonicRegression
 from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
+from statsmodels.tools.sm_exceptions import PerfectSeparationError
+
+from .._array_types import FloatArray, LabelArray
 
 Data = List[Tuple[float, float]]  # List of (predicted_probability, true_label).
 Bins = List[float]  # List of bin boundaries, excluding 0.0, but including 1.0.
@@ -616,3 +623,219 @@ def get_calib_probs(target, pred_probs, method='isotonic', n_boot=0, scoring_fun
         raise NotImplementedError
 
     return func_wrap(method_handle)
+
+
+# --- Logistic recalibration (calibration slope & intercept) ---
+#
+# Fits logit(y) ~ intercept + slope * logit(p) per group. Perfect calibration
+# corresponds to slope=1, intercept=0; slope<1 indicates overconfident
+# predictions (too spread out / too extreme), slope>1 underconfident;
+# intercept != 0 indicates systematic over-/under-prediction on average.
+#
+# The slope was originally proposed (as a measure of "spread", not under the
+# name "calibration slope") by:
+#   Cox, D.R. (1958). Two further applications of a model for binary
+#   regression. Biometrika, 45(3/4), 562-565.
+# The combined intercept/slope logistic-recalibration framework used here,
+# including this terminology and the standard interpretation of slope<1 as
+# overconfidence, follows clinical prediction modeling practice, e.g.:
+#   Steyerberg, E.W. and Vergouwe, Y. (2014). Towards better clinical
+#   prediction models: seven steps for development and an ABCD for
+#   validation. European Heart Journal, 35(29), 1925-1931.
+
+# A standard error this large in logit-units means the fit is numerically
+# degenerate (near-perfect separation) even when statsmodels reports formal
+# convergence, since a 1-SE move would imply an odds change of e^10 or more.
+MAX_INTERPRETABLE_SE = 10.0
+
+
+@dataclass(frozen=True)
+class CalibrationFit:
+    """Result of fit_calibration_slope_intercept: the fitted logistic
+    recalibration model logit(y_true) ~ intercept + slope * logit(y_pred_prob)."""
+
+    intercept: float
+    slope: float
+    cov_params: FloatArray  # 2x2 covariance matrix of [intercept, slope], in that order
+    n: int  # number of samples the fit was computed on
+
+
+def fit_calibration_slope_intercept(
+    y_true: LabelArray,
+    y_pred_prob: FloatArray,
+    min_cases_per_class: int,
+    eps: float = eps,
+) -> Optional[CalibrationFit]:
+    """
+    Fit a logistic recalibration model logit(y_true) ~ a + b * logit(y_pred_prob)
+    and return its intercept a, slope b, and their covariance matrix. See the
+    module-level comment above for the definition and interpretation of a and b,
+    and for references.
+
+    Returns None (rather than raising) if the fit is undefined or unreliable:
+    too few cases of either class, non-convergence, or near-perfect
+    separation - including the case where statsmodels reports convergence but
+    the resulting standard errors are too large to be interpretable. This
+    mirrors AUROC's min_cases_per_class pattern; callers should surface None
+    as NaN.
+
+    :param y_true: 1-D array of boolean/binary ground-truth labels.
+    :param y_pred_prob: 1-D array of predicted probabilities, same length as y_true.
+    :param min_cases_per_class: minimum number of positive and negative cases
+        required to attempt a fit; below this, returns None without fitting.
+    :param eps: clipping margin applied to y_pred_prob before taking logits,
+        to avoid +/-inf at 0 or 1.
+    :return: a CalibrationFit, or None if the fit is undefined/unreliable.
+    """
+    y_true = np.asarray(y_true, dtype=bool)
+    y_pred_prob = np.asarray(y_pred_prob, dtype=float)
+
+    n_pos = int(np.sum(y_true))
+    n_neg = int(len(y_true) - n_pos)
+    if n_pos < min_cases_per_class or n_neg < min_cases_per_class:
+        return None
+
+    logit_p = scipy_logit(np.clip(y_pred_prob, eps, 1 - eps))
+    design = sm.add_constant(logit_p)
+
+    try:
+        result = sm.Logit(y_true.astype(float), design).fit(disp=0)
+    except (PerfectSeparationError, np.linalg.LinAlgError):
+        return None
+
+    if not result.mle_retvals.get("converged", False):
+        return None
+
+    intercept, slope = result.params
+    cov_params = np.asarray(result.cov_params())
+
+    if not np.all(np.isfinite(cov_params)) or np.any(result.bse > MAX_INTERPRETABLE_SE):
+        return None
+
+    return CalibrationFit(intercept=float(intercept), slope=float(slope), cov_params=cov_params, n=len(y_true))
+
+
+def mean_reference_logit(y_pred_prob: FloatArray, eps: float = eps) -> float:
+    """
+    The shared reference point L0 at which calibration bias is evaluated:
+    the mean of logit(y_pred_prob) over the *whole* evaluation dataset.
+
+    Why the mean logit and not e.g. logit(mean(p)): the recalibration model is
+    fit on the logit scale, so the mean logit is the centroid of the data on
+    the scale the regression actually operates on. Centering there minimises
+    the variance of the evaluated bias (and the correlation between the fitted
+    intercept and slope), because it is the point best supported by the data.
+
+    Why the whole dataset and not each group (or each group plus its
+    complement): the reference point must be *identical* for every group being
+    compared, otherwise each group's bias is read off its own calibration
+    curve at a different place and the comparison is confounded - which is
+    precisely the failure mode this reference point exists to remove. Note in
+    particular that a group and its meval complement do not generally partition
+    the dataset (the complement of "male AND aged 20-30" is "not male AND not
+    aged 20-30", leaving rows in neither), so a per-comparison pooled mean
+    would not even be well defined, let alone shared.
+
+    :param y_pred_prob: predicted probabilities over the whole dataset.
+    :param eps: clipping margin applied before taking logits.
+    :return: L0, the mean predicted logit over the dataset.
+    """
+    y_pred_prob = np.asarray(y_pred_prob, dtype=float)
+    return float(np.mean(scipy_logit(np.clip(y_pred_prob, eps, 1 - eps))))
+
+
+def calibration_bias_at_reference(fit: CalibrationFit, reference_logit: float) -> Tuple[float, float]:
+    """
+    Evaluate a fitted recalibration model's *calibration bias* at a given
+    reference point, together with its variance.
+
+    For a fit logit(y) ~ a + b * logit(p), the model's own claim at score level
+    L is logit(p) = L, while the fitted truth is a + b*L. The signed log-odds
+    bias at L is therefore
+
+        Delta(L) = (a + b*L) - L = a + (b - 1) * L
+
+    i.e. how much the model over- (Delta < 0) or under-states (Delta > 0) the
+    true log-odds at that score level. Delta(L) depends only on (a, b) and L -
+    never on the group's score distribution - which is what makes it directly
+    comparable across groups with differing prevalences and score spreads.
+
+    Delta is a linear contrast c' [a, b] - L with c = [1, L], so its variance
+    follows exactly from the fit's covariance matrix, with no delta method:
+
+        Var(Delta) = Var(a) + L^2 * Var(b) + 2 * L * Cov(a, b)
+
+    Note Delta(0) = a: evaluating at L=0 (i.e. p=0.5) recovers the plain
+    intercept of the joint fit.
+
+    :param fit: a CalibrationFit from fit_calibration_slope_intercept.
+    :param reference_logit: L0, the score level (on the logit scale) at which
+        to evaluate the bias.
+    :return: (Delta(L0), Var(Delta(L0))).
+    """
+    contrast = np.array([1.0, reference_logit])
+    delta = float(fit.intercept + (fit.slope - 1.0) * reference_logit)
+    variance = float(contrast @ fit.cov_params @ contrast)
+    return delta, variance
+
+
+def wald_ci(estimate: float, variance: float, ci_alpha: float = 0.95) -> Tuple[float, float]:
+    """
+    Symmetric normal-approximation (Wald) confidence interval for an estimate
+    with known variance, e.g. a coefficient from fit_calibration_slope_intercept.
+
+    :param estimate: point estimate (e.g. a fitted intercept or slope).
+    :param variance: variance of the estimate (e.g. a diagonal entry of
+        CalibrationFit.cov_params).
+    :param ci_alpha: confidence level, e.g. 0.95 for a 95% CI.
+    :return: (lower, upper) bounds of the confidence interval.
+    """
+    se = np.sqrt(variance)
+    z = scipy.stats.norm.ppf(1 - (1 - ci_alpha) / 2)
+    return float(estimate - z * se), float(estimate + z * se)
+
+
+def logit_shift_correct(
+    p: FloatArray | float,
+    pi_train: float,
+    pi_test: float,
+    eps: float = eps,
+) -> FloatArray | float:
+    """
+    Adjust predicted probabilities p for a known shift in class prevalence
+    from pi_train (the prevalence the model was effectively trained/calibrated
+    under) to pi_test (the prevalence of the target population), assuming
+    pure label/prior shift (the class-conditional feature distributions
+    P(x|y) are unchanged - only P(y) differs):
+
+        logit(p_corrected) = logit(p) + logit(pi_test) - logit(pi_train)
+
+    This is the prior-correction formula of:
+        King, G. and Zeng, L. (2001). Logistic Regression in Rare Events
+        Data. Political Analysis, 9(2), 137-163.
+    and is algebraically identical to the Bayes-factor correction of:
+        Saerens, M., Latinne, P., and Decaestecker, C. (2002). Adjusting the
+        outputs of a classifier to new a priori probabilities: A simple
+        procedure. Neural Computation, 14(1), 21-41.
+
+    Not currently used by any metric; provided as a generic building block
+    for future prevalence-adjusted diagnostics (e.g. subgroup calibration
+    comparisons under differing base rates) as well as as a convenient way to
+    correct a model's predictions to a new target population before comprehensive 
+    (meval) assessment.
+
+    :param p: predicted probability or array of predicted probabilities,
+        under pi_train.
+    :param pi_train: the (assumed) class prevalence under which p was
+        trained/calibrated.
+    :param pi_test: the class prevalence of the target population to correct to.
+    :param eps: clipping margin applied to all probabilities before taking
+        logits, to avoid +/-inf at 0 or 1.
+    :return: corrected probability/probabilities, under pi_test.
+    """
+    p = np.clip(np.asarray(p, dtype=float), eps, 1 - eps)
+    pi_train = float(np.clip(pi_train, eps, 1 - eps))
+    pi_test = float(np.clip(pi_test, eps, 1 - eps))
+
+    shift = scipy_logit(pi_test) - scipy_logit(pi_train)
+    return expit(scipy_logit(p) + shift)

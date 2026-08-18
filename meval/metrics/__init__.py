@@ -3,6 +3,8 @@ from .Average import Average
 from .AUPRG import AUPRG
 from .AUROC import AUROC
 from .BrierScore import BrierScore
+from .CalibrationIntercept import CalibrationIntercept
+from .CalibrationSlope import CalibrationSlope
 from .Count import Count
 from .DRMSCE import DRMSCE
 from .MAE import MAE
@@ -19,6 +21,8 @@ __all__ = [
     "AUPRG",
     "AUROC",
     "BrierScore",
+    "CalibrationIntercept",
+    "CalibrationSlope",
     "Count",
     "DRMSCE",
     "MAE",

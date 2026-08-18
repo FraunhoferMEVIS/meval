@@ -23,7 +23,8 @@ class DRMSCE(CurveBasedComparisonMetric):
             needs_all_classes = False,
             is_descriptive = False,
             direction="minimize",
-            test=test
+            test=test,
+            curve_family="reliability",
         )
 
     def __call__(

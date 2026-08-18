@@ -526,7 +526,8 @@ class CurveBasedComparisonMetric(ComparisonMetric):
             needs_all_classes: bool,
             is_descriptive: bool,
             test: bool = False,
-            direction: str = "N/A"
+            direction: str = "N/A",
+            curve_family: Optional[str] = None,
     ):
         super().__init__(req_cols=req_cols,
                          metric_name=metric_name,
@@ -535,6 +536,14 @@ class CurveBasedComparisonMetric(ComparisonMetric):
                          is_descriptive=is_descriptive,
                          direction=direction,
                          test=test)
+
+        # Metrics sharing the same curve_family produce visually equivalent
+        # supporting curves (e.g. several calibration diagnostics all built on
+        # a reliability diagram), so plot_metric_overview renders that curve
+        # only once per family instead of once per metric. Defaults to the
+        # metric's own class name, so existing metrics (each in a family of
+        # one) keep today's one-metric-one-plot behavior unchanged.
+        self.curve_family = curve_family if curve_family is not None else type(self).__name__
 
     @abstractmethod
     def plot_supporting_curve(

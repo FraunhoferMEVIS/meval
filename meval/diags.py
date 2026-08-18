@@ -958,10 +958,23 @@ def plot_metric_overview(
     # it's computed from the original (unfiltered) metrics/CurveBasedComparisonMetric
     # count, not from plot_metrics.
     plot_metrics = [metric for metric in metrics if not metric.is_descriptive]
+
+    # Multiple CurveBasedComparisonMetrics can share a curve_family (e.g.
+    # several calibration diagnostics all built on the same reliability
+    # diagram) - only the first such metric per family, in list order, gets a
+    # supporting-curve subplot, so the family's plot renders exactly once no
+    # matter how many of its members are requested together.
+    curve_metric_ids_with_plot: set[int] = set()
+    seen_curve_families: set[str] = set()
+    for metric in metrics:
+        if isinstance(metric, CurveBasedComparisonMetric) and metric.curve_family not in seen_curve_families:
+            seen_curve_families.add(metric.curve_family)
+            curve_metric_ids_with_plot.add(id(metric))
+
     if test_df is None:
         num_subplots = len(metrics)
     else:
-        num_subplots = len(metrics) + sum([isinstance(metric, CurveBasedComparisonMetric) for metric in metrics])
+        num_subplots = len(metrics) + len(curve_metric_ids_with_plot)
 
     if add_risk_plot:
         assert test_df is not None
@@ -1012,7 +1025,7 @@ def plot_metric_overview(
 
         plot_idx += 1
 
-        if isinstance(metric, CurveBasedComparisonMetric) and test_df is not None:
+        if isinstance(metric, CurveBasedComparisonMetric) and test_df is not None and id(metric) in curve_metric_ids_with_plot:
             row = (plot_idx // cols) + 1
             col = (plot_idx % cols) + 1
             

@@ -17,6 +17,7 @@ from .config import settings
 from .metrics.ComparisonMetric import ComparisonMetric, MetricWithAnalyticalCI, ThresholdedComparisonMetric
 from .group_filter import GroupFilter, find_binary_complements
 from .select_groups import select_extreme_tested_groups
+from .stats.cache import clear_shared_computation_cache
 from .stats.confidence_intervals import bootstrap_ci
 from .stats.studentized_permut_pval import studentized_permut_pval
 from .reporting import generate_report_file
@@ -139,6 +140,11 @@ def compare_groups(df: pd.DataFrame,
     # df should contain group vars, score/performance metrics, any additional metadata that are available
     # group_interactions = (None, int - interaction levels). If None or 0, only top-level groups are compared.
     # If group_by is None, no stratification is performed, i.e., analyses are only performed over the whole test population
+
+    # Fresh cache for shared per-group computations (e.g. calibration fits reused
+    # across sibling metrics) - cleared here rather than relying on GC, since
+    # id(df) can otherwise be reused across unrelated calls.
+    clear_shared_computation_cache()
 
     # ------------------------------------------------------------------ #
     ### A: DETERMINE GROUPS FOR WHICH TO EVALUATE THE MODEL SEPARATELY ###
