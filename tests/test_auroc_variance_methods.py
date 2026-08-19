@@ -1,10 +1,10 @@
+import importlib
+
 import numpy as np
 import pandas as pd
 import pytest
-import importlib
 
 from meval.metrics import AUROC
-
 
 AUROC_MODULE = importlib.import_module("meval.metrics.AUROC")
 

@@ -1,8 +1,10 @@
-import pytest
 import pandas as pd
-from meval.metrics import MultiClassAUROC
+import pytest
+
 from meval import compare_groups
 from meval.config import settings
+from meval.metrics import MultiClassAUROC
+
 
 @pytest.mark.timeout(120)
 def test_error_propagation():

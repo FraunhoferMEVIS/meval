@@ -1,8 +1,10 @@
-from meval.group_filter import GroupFilter
-import pandas as pd
-import numpy as np
-from multiprocessing import cpu_count, get_context
 from itertools import repeat
+from multiprocessing import cpu_count, get_context
+
+import numpy as np
+import pandas as pd
+
+from meval.group_filter import GroupFilter
 
 
 def test_names_and_reprs():

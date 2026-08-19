@@ -1,5 +1,7 @@
 from typing import Sequence
+
 import pandas as pd
+
 from .metrics.ComparisonMetric import ComparisonMetric
 
 

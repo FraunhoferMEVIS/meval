@@ -1,13 +1,12 @@
-from typing import Optional
-from plotly.basedatatypes import BaseTraceType
-import plotly.graph_objects as go
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.basedatatypes import BaseTraceType
 
-from ._metrics import area_under_precision_recall_gain_score
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MaskLike
 from ..diags import prg_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
+from ._metrics import area_under_precision_recall_gain_score
+from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MaskLike
 
 
 class AUPRG(CurveBasedComparisonMetric):
@@ -34,8 +33,8 @@ class AUPRG(CurveBasedComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
         
@@ -49,9 +48,9 @@ class AUPRG(CurveBasedComparisonMetric):
             self, 
             metric_results_df: pd.DataFrame, 
             test_df: pd.DataFrame, 
-            group_colors_dict: Optional[dict[str, str]] = None, 
+            group_colors_dict: dict[str, str] | None = None, 
             add_all_group: bool = True,
-            threshold: Optional[float] = None,
+            threshold: float | None = None,
             ) -> tuple[go.Figure, list[BaseTraceType], dict]:
         
         plot_groups_prg = select_extreme_groups(metric_results_df, 

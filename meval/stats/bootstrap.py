@@ -1,13 +1,13 @@
-import numpy as np
-import pandas as pd
-from typing import Optional
 from collections.abc import Callable
 
-from .utils import decide_stratify
+import numpy as np
+import pandas as pd
+
+from .._array_types import FloatArray, LabelArray, MaskLike
 from ..config import settings
-from ..metrics.ComparisonMetric import ComparisonMetric
 from ..group_filter import GroupFilter
-from .._array_types import MaskLike, FloatArray, LabelArray
+from ..metrics.ComparisonMetric import ComparisonMetric
+from .utils import decide_stratify
 
 
 class RandomState:
@@ -48,9 +48,9 @@ def _mask_to_positions(mask: MaskLike, n_rows: int) -> np.ndarray:
 def bootstrap_metric(
         df: pd.DataFrame, 
         metric: ComparisonMetric, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
-        num_bootstrap: Optional[int] = None
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
+        num_bootstrap: int | None = None
         ) -> np.ndarray:
 
     rng = RandomState.get_rng()

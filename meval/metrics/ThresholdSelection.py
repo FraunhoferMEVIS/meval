@@ -1,15 +1,15 @@
-from typing import Optional
+
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_curve, precision_recall_curve
+from sklearn.metrics import precision_recall_curve, roc_curve
 
 from .ComparisonMetric import ComparisonMetric
 
 
 def thresh_tune(
-    df: Optional[pd.DataFrame] = None,
-    y_true: Optional[np.ndarray | pd.Series] = None,
-    y_pred_prob: Optional[np.ndarray | pd.Series] = None,
+    df: pd.DataFrame | None = None,
+    y_true: np.ndarray | pd.Series | None = None,
+    y_pred_prob: np.ndarray | pd.Series | None = None,
     method: str = "base_rate"
 ) -> float:
 

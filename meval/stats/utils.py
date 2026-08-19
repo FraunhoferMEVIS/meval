@@ -1,8 +1,8 @@
+
 import numpy as np
 import pandas as pd
-from typing import Optional
 
-from .._array_types import LabelArray, NumericArray, FloatArray
+from .._array_types import FloatArray, LabelArray, NumericArray
 
 
 def decide_stratify(
@@ -29,7 +29,7 @@ def decide_stratify(
 
 def nan_mean(
     a: NumericArray,
-        axis: Optional[int] = None, 
+        axis: int | None = None, 
         nan_fraction_allowed: float = 0.1
     ) -> float | FloatArray:
     a_float = np.asarray(a, dtype=float)
@@ -56,7 +56,7 @@ def nan_mean(
 def ci_nan_quantile(
     a: NumericArray,
     q: float | FloatArray,
-        axis: Optional[int] = None, 
+        axis: int | None = None, 
         nan_fraction_allowed: float = 0.1
     ) -> float | FloatArray:
     a_float = np.asarray(a, dtype=float)

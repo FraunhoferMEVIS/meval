@@ -4,7 +4,6 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-
 BoolArray: TypeAlias = npt.NDArray[np.bool_]
 IntArray: TypeAlias = npt.NDArray[np.integer[Any]]
 BoolSeriesMask: TypeAlias = pd.Series

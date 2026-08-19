@@ -1,5 +1,6 @@
 import os
 
+
 # partially Claude-generated
 class Settings:
     _instance = None

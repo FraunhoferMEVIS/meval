@@ -5,7 +5,6 @@ import pandas as pd
 
 from meval.metrics import AUROC, MultiClassAUROC
 
-
 AUROC_MODULE = importlib.import_module("meval.metrics.AUROC")
 MULTI_AUROC_MODULE = importlib.import_module("meval.metrics.MultiClassAUROC")
 

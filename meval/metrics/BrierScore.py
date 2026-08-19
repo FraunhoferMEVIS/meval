@@ -1,10 +1,9 @@
-from typing import Optional
-import pandas as pd
 import numpy as np
+import pandas as pd
 
+from ..group_filter import GroupFilter
 from ._metrics import brier_scores
 from .ComparisonMetric import ComparisonMetric, MaskLike
-from ..group_filter import GroupFilter
 
 
 class BrierScore(ComparisonMetric):
@@ -14,7 +13,7 @@ class BrierScore(ComparisonMetric):
             req_cols=[ComparisonMetric.y_true_cols, ComparisonMetric.y_pred_prob_cols],
             metric_name='BS (bal)' if balanced else 'BS',
             reference_class='self',
-            needs_all_classes=True if balanced else False,
+            needs_all_classes=bool(balanced),
             is_descriptive=False,
             direction="minimize",
             test=test
@@ -24,8 +23,8 @@ class BrierScore(ComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
         

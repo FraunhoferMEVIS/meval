@@ -1,4 +1,5 @@
 import os
+
 # Add these BEFORE importing pandas/numpy
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1' 
@@ -6,11 +7,13 @@ os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 import pandas as pd
+
 from meval import compare_groups
-from meval.metrics import BrierScore
-from meval.group_filter import find_binary_complements, GroupFilter
 from meval.compare_groups import get_group_combinations
 from meval.config import settings
+from meval.group_filter import GroupFilter, find_binary_complements
+from meval.metrics import BrierScore
+
 
 def setup():
     # a-c are binary attrs, d is not

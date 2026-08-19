@@ -1,5 +1,5 @@
 from itertools import combinations
-from typing import Optional, Sequence, Union
+from typing import Sequence, Union
 
 import numpy as np
 
@@ -24,7 +24,7 @@ def _as_binary(y_true: LabelArray) -> FloatArray:
 def fast_auc(
     y_true: LabelArray,
     y_score: FloatArray,
-    sample_weight: Optional[FloatArray] = None,
+    sample_weight: FloatArray | None = None,
 ) -> Union[float, str]:
     y_true_bin = _as_binary(y_true)
     y_score_arr = np.asarray(y_score, dtype=float)
@@ -151,7 +151,7 @@ else:
 def fast_numba_auc(
     y_true: LabelArray,
     y_score: FloatArray,
-    sample_weight: Optional[FloatArray] = None,
+    sample_weight: FloatArray | None = None,
 ) -> float:
     global _NUMBA_RUNTIME_AVAILABLE
 
@@ -189,7 +189,7 @@ def fast_numba_auc(
 def fast_ovo_auc(
     y_true: LabelArray,
     y_score: FloatArray,
-    labels: Optional[Sequence] = None,
+    labels: Sequence | None = None,
 ) -> float:
     y_true_arr = np.asarray(y_true)
     y_score_arr = np.asarray(y_score, dtype=float)
@@ -232,7 +232,7 @@ def fast_ovo_auc(
 def fast_ovo_auc_numba(
     y_true: LabelArray,
     y_score: FloatArray,
-    labels: Optional[Sequence] = None,
+    labels: Sequence | None = None,
 ) -> float:
     y_true_arr = np.asarray(y_true)
     y_score_arr = np.asarray(y_score, dtype=float)

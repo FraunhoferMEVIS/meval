@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
 import scipy.stats
-from meval.stats.bootstrap import RandomState
-from meval.stats.studentized_permut_pval import studentized_permut_pval
-from meval.metrics import Average
+
 from meval.config import settings
 from meval.group_filter import GroupFilter
+from meval.metrics import Average
+from meval.stats.bootstrap import RandomState
+from meval.stats.studentized_permut_pval import studentized_permut_pval
+
 
 def get_exact_permutation_p_value(n_total, k_total, n_drawn, observed_x):
     """

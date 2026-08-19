@@ -1,13 +1,14 @@
-from typing import Optional
-from plotly.basedatatypes import BaseTraceType
-import plotly.graph_objects as go
-import pandas as pd
 
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MaskLike
-from ._calibration import get_unbiased_calibration_rmse
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.basedatatypes import BaseTraceType
+
 from ..diags import rel_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
+from ._calibration import get_unbiased_calibration_rmse
+from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MaskLike
+
 
 # Debiased root-mean-squared calibration error, see https://dl.acm.org/doi/10.1145/3593013.3594045
 # To be preferred over ECE (expected calibration error) - which is commonly used to measure calibration - because that has (strong!) sample size biases,
@@ -30,8 +31,8 @@ class DRMSCE(CurveBasedComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
 
@@ -44,9 +45,9 @@ class DRMSCE(CurveBasedComparisonMetric):
             self, 
             metric_results_df: pd.DataFrame, 
             test_df: pd.DataFrame, 
-            group_colors_dict: Optional[dict[str, str]] = None, 
+            group_colors_dict: dict[str, str] | None = None, 
             add_all_group: bool = True,
-            threshold: Optional[float] = None,
+            threshold: float | None = None,
             ) -> tuple[go.Figure, list[BaseTraceType], dict]:
         
         plot_groups_rel = select_extreme_groups(metric_results_df, 

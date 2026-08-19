@@ -1,4 +1,5 @@
 import os
+
 # Add these BEFORE importing pandas/numpy
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1' 
@@ -6,10 +7,11 @@ os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 import pandas as pd
-from meval.metrics import MultiClassAUROC
+
 from meval import compare_groups
-from meval.diags import metric_plot
 from meval.config import settings
+from meval.diags import metric_plot
+from meval.metrics import MultiClassAUROC
 
 
 def test_multiauroc():

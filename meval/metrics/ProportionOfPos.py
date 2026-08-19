@@ -1,9 +1,9 @@
-from typing import Optional
+
 import numpy as np
 import pandas as pd
 
-from .ComparisonMetric import ComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
+from .ComparisonMetric import ComparisonMetric, MaskLike
 
 
 class ProportionOfPos(ComparisonMetric):
@@ -47,8 +47,8 @@ class ProportionOfPos(ComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
@@ -73,8 +73,8 @@ class _PerClassProportionOfPos(ComparisonMetric):
     def __call__(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)

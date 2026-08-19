@@ -1,8 +1,26 @@
 import pandas as pd
+
 from meval import compare_groups
-from meval.metrics import Accuracy, ProportionOfPos, BrierScore, AUROC, AUPRG, DRMSCE, Count, thresh_tune
-from meval.diags import plot_metric_overview, metric_plot, roc_diag, rel_diag, prg_diag, pr_diag
 from meval.config import settings
+from meval.diags import (
+    metric_plot,
+    plot_metric_overview,
+    pr_diag,
+    prg_diag,
+    rel_diag,
+    roc_diag,
+)
+from meval.metrics import (
+    AUPRG,
+    AUROC,
+    DRMSCE,
+    Accuracy,
+    BrierScore,
+    Count,
+    ProportionOfPos,
+    thresh_tune,
+)
+
 
 def isic_demo():
 

@@ -1,21 +1,26 @@
-from typing import Optional, Union
-from plotly.basedatatypes import BaseTraceType
-import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.basedatatypes import BaseTraceType
 
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar, MaskLike
+from ..config import settings
+from ..diags import rel_diag
+from ..group_filter import GroupFilter
+from ..select_groups import select_extreme_groups
+from ..stats.cache import dataset_computation, shared_computation
 from ._calibration import (
     calibration_bias_at_reference,
     fit_calibration_slope_intercept,
     mean_reference_logit,
     wald_ci,
 )
-from ..config import settings
-from ..diags import rel_diag
-from ..group_filter import GroupFilter
-from ..select_groups import select_extreme_groups
-from ..stats.cache import dataset_computation, shared_computation
+from .ComparisonMetric import (
+    ComparisonMetric,
+    CurveBasedComparisonMetric,
+    MaskLike,
+    MetricWithAnalyticalCI,
+    MetricWithAnalyticalVar,
+)
 
 
 class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar):
@@ -72,7 +77,7 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
     shared_computation, so requesting both does not refit the model twice.
     """
 
-    def __init__(self, test: bool = False, reference_score: Union[str, float] = "mean"):
+    def __init__(self, test: bool = False, reference_score: str | float = "mean"):
         """
         :param test: whether to run significance testing for this metric.
         :param reference_score: the score level at which calibration bias is
@@ -129,7 +134,7 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
             ),
         )
 
-    def _get_fit(self, df: pd.DataFrame, group_filter: Optional[GroupFilter], mask: MaskLike, validate: bool):
+    def _get_fit(self, df: pd.DataFrame, group_filter: GroupFilter | None, mask: MaskLike, validate: bool):
         """
         Fetch this group's shared CalibrationFit (see _calibration.py), computing
         it on first access and reusing it on subsequent calls and across
@@ -153,7 +158,7 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
             ),
         )
 
-    def _get_bias(self, df: pd.DataFrame, group_filter: Optional[GroupFilter], mask: MaskLike, validate: bool):
+    def _get_bias(self, df: pd.DataFrame, group_filter: GroupFilter | None, mask: MaskLike, validate: bool):
         """
         This group's calibration bias at the shared reference point, and its
         variance, or (nan, nan) if the underlying fit is undefined/unreliable.
@@ -172,8 +177,8 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
     def __call__(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
         """
@@ -194,11 +199,11 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
     def get_ci(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         ci_alpha: float = 0.95,
         validate: bool = True,
-        return_val: Optional[bool] = False,
+        return_val: bool | None = False,
         ) -> tuple[float, float] | tuple[float, tuple[float, float]]:
         """
         Analytical Wald confidence interval for the calibration bias, derived
@@ -223,10 +228,10 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
     def get_variance(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True,
-        return_val: Optional[bool] = False,
+        return_val: bool | None = False,
         ) -> float | tuple[float, float]:
         """
         Analytical variance of the calibration bias at the reference point,
@@ -248,9 +253,9 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
             self,
             metric_results_df: pd.DataFrame,
             test_df: pd.DataFrame,
-            group_colors_dict: Optional[dict[str, str]] = None,
+            group_colors_dict: dict[str, str] | None = None,
             add_all_group: bool = True,
-            threshold: Optional[float] = None,
+            threshold: float | None = None,
             ) -> tuple[go.Figure, list[BaseTraceType], dict]:
         """
         Reliability diagram for the groups with the most extreme calibration

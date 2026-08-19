@@ -1,10 +1,10 @@
 import warnings
-from typing import Optional
+
 import numpy as np
 import pandas as pd
 
-from .ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar, MaskLike
 from ..group_filter import GroupFilter
+from .ComparisonMetric import ComparisonMetric, MaskLike, MetricWithAnalyticalVar
 
 
 class MAE(MetricWithAnalyticalVar):
@@ -57,8 +57,8 @@ class MAE(MetricWithAnalyticalVar):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True,
         return_var: bool = False
         ) -> float | tuple[float, float]:
@@ -85,18 +85,18 @@ class MAE(MetricWithAnalyticalVar):
     def get_variance(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True,
-        y_true: Optional[pd.Series | np.ndarray] = None,
-        y_pred: Optional[pd.Series | np.ndarray] = None,
-        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
-        return_val: Optional[bool] = False
+        y_true: pd.Series | np.ndarray | None = None,
+        y_pred: pd.Series | np.ndarray | None = None,
+        y_pred_prob: pd.Series | np.ndarray | None = None,
+        return_val: bool | None = False
         ) -> float | tuple[float, float]:
 
         assert y_pred_prob is None, "MAE does not use y_pred_prob, expected y_pred_prob to be None."
 
-        mask: Optional[MaskLike]
+        mask: MaskLike | None
         if y_true is None or y_pred is None:
             mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
         else:

@@ -1,11 +1,11 @@
+import importlib
+
 import pandas as pd
 import pytest
-import importlib
 
 from meval import compare_groups
 from meval.config import settings
 from meval.metrics import Count
-
 
 COMPARE_GROUPS_MODULE = importlib.import_module("meval.compare_groups")
 

@@ -1,19 +1,20 @@
-from typing import Optional, Literal, cast
-import pandas as pd
-import numpy as np
+from typing import Literal, cast
 
+import numpy as np
+import pandas as pd
+
+from ..config import settings
+from ..group_filter import GroupFilter
 from ._metrics import auroc
 from .ComparisonMetric import ComparisonMetric, MaskLike
 from .fastauc import fast_ovo_auc_numba
-from ..config import settings
-from ..group_filter import GroupFilter
 
 
 class MultiClassAUROC(ComparisonMetric):
 
     def __init__(self, test: bool = False, 
                  auroc_type: Literal['ovo', 'OvO', 'OVO', 'ovr', 'OvR', 'OVR'] = 'ovo',
-                 min_samples_per_class: Optional[int] = None):
+                 min_samples_per_class: int | None = None):
         # Default to OvO (instead of OvR) because that is better comparable between subgroups with differing label distributions.
         assert auroc_type in ["ovo", "ovr"]
         super().__init__(
@@ -31,8 +32,8 @@ class MultiClassAUROC(ComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True,
         ) -> float | tuple[float, float] | tuple[float, tuple[float, float]]:
         

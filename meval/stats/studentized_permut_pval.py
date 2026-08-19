@@ -1,15 +1,14 @@
-import scipy
+
 import numpy as np
 import pandas as pd
-from typing import Optional
+import scipy
 
-from .bootstrap import bootstrap_metric, _mask_to_positions, RandomState
-from .utils import nan_mean
-from ..metrics.ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar
-from ..group_filter import GroupFilter
-from ..config import settings
 from .._array_types import MaskLike
-
+from ..config import settings
+from ..group_filter import GroupFilter
+from ..metrics.ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar
+from .bootstrap import RandomState, _mask_to_positions, bootstrap_metric
+from .utils import nan_mean
 
 try:
     from numba import njit as _numba_njit
@@ -44,7 +43,7 @@ if _NUMBA_AVAILABLE:
 def shuffle_masks_from_state(
     idces_joined: np.ndarray,
     n_a: int,
-    work_buffer: Optional[np.ndarray],
+    work_buffer: np.ndarray | None,
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, np.ndarray]:
 
@@ -75,12 +74,12 @@ def shuffle_masks_from_state(
 
 
 def shuffle_masks(
-    mask_a: Optional[MaskLike] = None,
-    mask_b: Optional[MaskLike] = None,
+    mask_a: MaskLike | None = None,
+    mask_b: MaskLike | None = None,
     *,
-    idces_joined: Optional[np.ndarray] = None,
-    n_a: Optional[int] = None,
-    work_buffer: Optional[np.ndarray] = None,
+    idces_joined: np.ndarray | None = None,
+    n_a: int | None = None,
+    work_buffer: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
 
     rng = RandomState.get_rng()
@@ -226,10 +225,10 @@ def studentized_permut_pval(
     df: pd.DataFrame,
     metric: ComparisonMetric,
     group_filter: GroupFilter,
-    num_permut: Optional[int] = None,
-    max_num_bootstrap: Optional[int] = None,
+    num_permut: int | None = None,
+    max_num_bootstrap: int | None = None,
     correct_zero_pvals: bool = True,
-    pval_early_stop_alpha: Optional[float] = settings.pval_early_stop_alpha,
+    pval_early_stop_alpha: float | None = settings.pval_early_stop_alpha,
     ) -> tuple[float, float]:
     # Algo 1 in https://arxiv.org/abs/2007.05124
     # (My implementation)

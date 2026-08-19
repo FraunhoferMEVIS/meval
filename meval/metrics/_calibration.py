@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, TypeVar, Sequence
+from typing import Sequence, TypeVar
 from warnings import warn
 
 import numpy as np
@@ -9,16 +9,17 @@ import scipy.signal
 import scipy.stats
 import statsmodels.api as sm
 from scipy.interpolate import PchipInterpolator
-from scipy.special import expit, logit as scipy_logit
+from scipy.special import expit
+from scipy.special import logit as scipy_logit
 from sklearn.isotonic import IsotonicRegression
 from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
 from statsmodels.tools.sm_exceptions import PerfectSeparationError
 
 from .._array_types import FloatArray, LabelArray
 
-Data = List[Tuple[float, float]]  # List of (predicted_probability, true_label).
-Bins = List[float]  # List of bin boundaries, excluding 0.0, but including 1.0.
-BinnedData = List[Data]  # binned_data[i] contains the data in bin i.
+Data = list[tuple[float, float]]  # List of (predicted_probability, true_label).
+Bins = list[float]  # List of bin boundaries, excluding 0.0, but including 1.0.
+BinnedData = list[Data]  # binned_data[i] contains the data in bin i.
 T = TypeVar('T')
 
 eps = 1e-6
@@ -185,7 +186,7 @@ def difference_mean(data: Data) -> float:
     return ave_pred_prob - ave_label
 
 
-def get_bin_probs(binned_data: BinnedData) -> List[float]:
+def get_bin_probs(binned_data: BinnedData) -> list[float]:
     # Fully copied from https://github.com/p-lambda/verified_calibration/blob/master/calibration/utils.py (MIT license)
     bin_sizes = list(map(len, binned_data))
     num_data = sum(bin_sizes)
@@ -665,7 +666,7 @@ def fit_calibration_slope_intercept(
     y_pred_prob: FloatArray,
     min_cases_per_class: int,
     eps: float = eps,
-) -> Optional[CalibrationFit]:
+) -> CalibrationFit | None:
     """
     Fit a logistic recalibration model logit(y_true) ~ a + b * logit(y_pred_prob)
     and return its intercept a, slope b, and their covariance matrix. See the

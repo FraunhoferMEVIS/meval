@@ -1,10 +1,21 @@
 import pandas as pd
 
-from meval.metrics import Specificity, ProportionOfPos, BrierScore, AUROC, AUPRG, DRMSCE, Count
-from meval.metrics.ThresholdSelection import thresh_tune
-from meval.diags import metric_plot, roc_diag, plot_metric_overview, rel_diag
 from meval import compare_groups
 from meval.config import settings
+from meval.diags import metric_plot, plot_metric_overview, rel_diag, roc_diag
+from meval.metrics import (
+    AUPRG,
+    AUROC,
+    DRMSCE,
+    BrierScore,
+    CalibrationIntercept,
+    CalibrationSlope,
+    Count,
+    ProportionOfPos,
+    Specificity,
+)
+from meval.metrics.ThresholdSelection import thresh_tune
+
 
 def read_mimic_df():
     df = pd.read_csv('mimic_results.csv', index_col=0)
@@ -20,8 +31,15 @@ def mimic_demo():
 
     test_df = read_mimic_df()
 
+    # DRMSCE, CalibrationSlope and CalibrationIntercept all share the reliability
+    # diagram as their supporting curve (curve_family="reliability"), so only one
+    # such plot is produced regardless of how many of them are requested.
+    # CalibrationSlope < 1 indicates overconfident predictions; CalibrationIntercept
+    # reports signed calibration bias at a reference score shared by all groups,
+    # which is what makes it comparable across groups of differing prevalence.
     metrics=[Specificity(test=True), ProportionOfPos(), BrierScore(balanced=False), BrierScore(balanced=True), 
-             AUROC(test=True), AUPRG(rec_gain_min=0.8), DRMSCE(), Count()]
+             AUROC(test=True), AUPRG(rec_gain_min=0.8), DRMSCE(),
+             CalibrationSlope(), CalibrationIntercept(), Count()]
 
     threshold = thresh_tune(df=test_df, method="gmean")  # ! In an actual application, threshold selection should be done on a different dataset !
 

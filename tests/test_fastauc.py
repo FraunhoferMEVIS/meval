@@ -3,7 +3,12 @@ import pytest
 from sklearn.metrics import roc_auc_score
 
 import meval.metrics.fastauc as fastauc_mod
-from meval.metrics.fastauc import fast_auc, fast_numba_auc, fast_ovo_auc, fast_ovo_auc_numba
+from meval.metrics.fastauc import (
+    fast_auc,
+    fast_numba_auc,
+    fast_ovo_auc,
+    fast_ovo_auc_numba,
+)
 
 
 def _softmax(x):

@@ -1,4 +1,4 @@
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -44,9 +44,9 @@ def safe_np_isnan(val_or_arr_or_series):
 class GroupFilter(object):
     def __init__(
         self,
-        group_attribute_dict: Optional[dict] = None,
-        group_repr_str: Optional[str] = None,
-        col_types: Optional[dict[str, Any] | pd.Series] = None,
+        group_attribute_dict: dict | None = None,
+        group_repr_str: str | None = None,
+        col_types: dict[str, Any] | pd.Series | None = None,
     ) -> None:
         # pass group_attribute_dict={} to create 'all' group
         if group_attribute_dict is not None:

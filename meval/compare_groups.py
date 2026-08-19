@@ -1,27 +1,30 @@
-import itertools
 import inspect
-from os import PathLike, fspath
+import itertools
+import signal
+import sys
 import time
 import warnings
 from multiprocessing import Pool, cpu_count, current_process, get_start_method
-from typing import Collection, Optional, Sequence
-import signal
-import sys
+from os import PathLike, fspath
+from typing import Collection, Sequence
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from statsmodels.stats.multitest import multipletests
+from tqdm import tqdm
 
 from .config import settings
-from .metrics.ComparisonMetric import ComparisonMetric, MetricWithAnalyticalCI, ThresholdedComparisonMetric
 from .group_filter import GroupFilter, find_binary_complements
+from .metrics.ComparisonMetric import (
+    ComparisonMetric,
+    MetricWithAnalyticalCI,
+    ThresholdedComparisonMetric,
+)
+from .reporting import generate_report_file
 from .select_groups import select_extreme_tested_groups
 from .stats.cache import clear_shared_computation_cache
 from .stats.confidence_intervals import bootstrap_ci
 from .stats.studentized_permut_pval import studentized_permut_pval
-from .reporting import generate_report_file
-
 
 FilePath = str | PathLike[str]
 
@@ -29,7 +32,7 @@ FilePath = str | PathLike[str]
 def calc_metric(df: pd.DataFrame, 
                 metric: ComparisonMetric, 
                 group_filter: GroupFilter, 
-                test_groups: Optional[Collection[str]] = None,
+                test_groups: Collection[str] | None = None,
                 ) -> pd.DataFrame:
 
     with warnings.catch_warnings():
@@ -125,15 +128,15 @@ def _is_main_module_top_level_python_file_call() -> bool:
 
 def compare_groups(df: pd.DataFrame, 
                    metrics: Sequence[ComparisonMetric], 
-                   group_by: Optional[str | Collection[str]] = None, 
+                   group_by: str | Collection[str] | None = None, 
                    group_interactions: None | int = None,
                    min_subgroup_size: int = 20,  # ignored if analysis_groups are provided
-                   report_file: Optional[FilePath] = None, 
+                   report_file: FilePath | None = None, 
                    add_all_group: bool = True,
-                   threshold: Optional[float] = None,
+                   threshold: float | None = None,
                    max_plot_groups: int = 12,
-                   analysis_groups: Optional[Collection[str]] = None,
-                   plot_groups: Optional[Sequence[str]] = None,
+                   analysis_groups: Collection[str] | None = None,
+                   plot_groups: Sequence[str] | None = None,
                    test_correction_method: str = "fdr_bh",  # assumes non-negatively related tests
                    return_metric_objs: bool = False,  # if True, also return the resolved (post-per-class-expansion) list of ComparisonMetric objects actually evaluated, in output column order - each carries .metric_name, .is_descriptive, .direction, and (for per-class metrics) .class_id, so callers don't need to re-derive these from metric_name strings.
                    ) -> tuple[pd.DataFrame, list[str]] | tuple[pd.DataFrame, list[str], list[ComparisonMetric]]:

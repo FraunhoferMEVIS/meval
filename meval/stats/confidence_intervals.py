@@ -1,12 +1,12 @@
 
 import numpy as np
+import pandas as pd
 import scipy
 from statsmodels.stats.proportion import proportion_confint as sm_proportion_confint
-import pandas as pd
 
+from .._array_types import LabelArray
 from .bootstrap import bootstrap_metric
 from .utils import ci_nan_quantile
-from .._array_types import LabelArray
 
 
 def variance_of_proportion(numerator: int, denominator: int) -> float:

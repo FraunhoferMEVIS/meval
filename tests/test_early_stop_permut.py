@@ -5,16 +5,20 @@ os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
 import pytest
 import scipy
-from typing import cast
 
 import meval.stats.studentized_permut_pval as stats_pval
 from meval.group_filter import GroupFilter
 from meval.metrics.ComparisonMetric import ComparisonMetric
-from meval.stats.studentized_permut_pval import _clopper_pearson_lower, studentized_permut_pval
+from meval.stats.studentized_permut_pval import (
+    _clopper_pearson_lower,
+    studentized_permut_pval,
+)
 
 
 def _minimal_df_and_filter() -> tuple[pd.DataFrame, GroupFilter]:

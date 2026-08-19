@@ -1,7 +1,8 @@
-import pandas as pd
 import numpy as np
-from meval.stats.confidence_intervals import newcombe_auroc_ci
+import pandas as pd
 import pytest
+
+from meval.stats.confidence_intervals import newcombe_auroc_ci
 
 
 def test_newcombe_ci_perfect():

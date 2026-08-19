@@ -1,18 +1,21 @@
 import os
+
 # Add these BEFORE importing pandas/numpy
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1' 
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
-import pandas as pd
-import numpy as np
-import pytest
 import warnings
+
+import numpy as np
+import pandas as pd
+import pytest
 from statsmodels.stats.multitest import multipletests
-from meval.metrics import Accuracy, Specificity
+
 from meval import compare_groups
 from meval.config import settings
+from meval.metrics import Accuracy, Specificity
 
 
 def test_corrected_pvals_not_smaller_than_raw_for_holm_and_fdr_bh():

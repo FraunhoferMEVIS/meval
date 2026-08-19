@@ -1,14 +1,14 @@
 from os import PathLike, fspath
-import plotly.io as pio
-import plotly.graph_objects as go
-import seaborn as sns
+from typing import Sequence
+
 import pandas as pd
-from typing import Optional, Sequence
+import plotly.graph_objects as go
+import plotly.io as pio
+import seaborn as sns
 
 from .config import settings
 from .diags import plot_metric_overview, volcano_plot
 from .metrics.ComparisonMetric import ComparisonMetric
-
 
 FilePath = str | PathLike[str]
 
@@ -23,7 +23,7 @@ def generate_report_file(
         all_metric_results_df: pd.DataFrame, 
         plot_groups: Sequence[str],
         metrics: Sequence[ComparisonMetric],
-        threshold: Optional[float] = None
+        threshold: float | None = None
         ) -> None:
 
     report_file_path = fspath(report_file_path)

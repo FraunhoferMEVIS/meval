@@ -1,18 +1,23 @@
-from typing import Optional
-from plotly.basedatatypes import BaseTraceType
-import plotly.graph_objects as go
-import pandas as pd
-from confidenceinterval.delong import delong_roc_variance
 import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
 import scipy.stats
+from confidenceinterval.delong import delong_roc_variance
+from plotly.basedatatypes import BaseTraceType
 
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar, MaskLike
-from .fastauc import fast_numba_auc
+from ..config import settings
 from ..diags import roc_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
-from ..config import settings
 from ..stats.confidence_intervals import newcombe_auroc_ci
+from .ComparisonMetric import (
+    ComparisonMetric,
+    CurveBasedComparisonMetric,
+    MaskLike,
+    MetricWithAnalyticalCI,
+    MetricWithAnalyticalVar,
+)
+from .fastauc import fast_numba_auc
 
 
 def _fast_binary_auroc_with_min_cases(
@@ -111,8 +116,8 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True,
         return_ci: bool = False,
         return_var: bool = False
@@ -145,9 +150,9 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
             self, 
             metric_results_df: pd.DataFrame, 
             test_df: pd.DataFrame, 
-            group_colors_dict: Optional[dict[str, str]] = None, 
+            group_colors_dict: dict[str, str] | None = None, 
             add_all_group: bool = True,
-            threshold: Optional[float] = None,
+            threshold: float | None = None,
             ) -> tuple[go.Figure, list[BaseTraceType], dict]:
         
         plot_groups_roc = select_extreme_groups(metric_results_df, 
@@ -159,14 +164,14 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
     def get_ci(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         ci_alpha: float = 0.95,
         validate: bool = True,
-        y_true: Optional[pd.Series | np.ndarray] = None,
-        y_pred: Optional[pd.Series | np.ndarray] = None,
-        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
-        return_val: Optional[bool] = False,
+        y_true: pd.Series | np.ndarray | None = None,
+        y_pred: pd.Series | np.ndarray | None = None,
+        y_pred_prob: pd.Series | np.ndarray | None = None,
+        return_val: bool | None = False,
         method: str = "auto"
         ) -> tuple[float, float] | tuple[float, tuple[float, float]]:
 
@@ -225,13 +230,13 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
     def get_variance(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True,
-        y_true: Optional[pd.Series | np.ndarray] = None,
-        y_pred: Optional[pd.Series | np.ndarray] = None,
-        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
-        return_val: Optional[bool] = False,
+        y_true: pd.Series | np.ndarray | None = None,
+        y_pred: pd.Series | np.ndarray | None = None,
+        y_pred_prob: pd.Series | np.ndarray | None = None,
+        return_val: bool | None = False,
         method: str = "auto",
         ) -> float | tuple[float, float]:
 

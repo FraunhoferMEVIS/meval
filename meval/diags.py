@@ -1,7 +1,10 @@
+import math
 from collections.abc import Callable
 from os import PathLike, fspath
-from typing import Optional, Sequence
-import math
+from typing import Sequence
+from warnings import warn
+
+import kaleido
 import numpy as np
 import pandas as pd
 import plotly.colors as pc
@@ -10,46 +13,51 @@ import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.basedatatypes import BaseTraceType
 from plotly.subplots import make_subplots
-import kaleido
-from warnings import warn
 
 from ._array_types import BoolArray, FloatArray
 from .config import settings
 from .group_filter import GroupFilter
 from .metrics._calibration import loess_calibration
 from .metrics._metrics import (
+    FPR,
+    TPR,
     bootstrap_pr_curve,
     bootstrap_prg_curve,
     bootstrap_roc_curve,
-    FPR, TPR, precision, recall, precision_gain, recall_gain
+    precision,
+    precision_gain,
+    recall,
+    recall_gain,
 )
-from .metrics.ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, ThresholdedComparisonMetric
-from .metrics.Count import Count
+from .metrics.ComparisonMetric import (
+    ComparisonMetric,
+    CurveBasedComparisonMetric,
+    ThresholdedComparisonMetric,
+)
 from .stats.utils import ci_nan_quantile
-
 
 FilePath = str | PathLike[str]
 
 default_layout = {
     "template": "plotly_white",
     "title_x": 0.5,
-    "legend": dict(
-        x=1.02,
-        y=0.5,
-        xanchor="left",
-        yanchor="middle",
-        font=dict(size=9),
+    "legend": {
+        "x": 1.02,
+        "y": 0.5,
+        "xanchor": "left",
+        "yanchor": "middle",
+        "font": {"size": 9},
         # bgcolor='rgba(255,255,255,0.5)',
-        borderwidth=0,
-    ),
+        "borderwidth": 0,
+    },
 }
 
 default_layout_no_title = default_layout | {
-    "margin": dict(l=0, r=0, t=0, b=0),
+    "margin": {"l": 0, "r": 0, "t": 0, "b": 0},
 }
 
 default_layout_with_title = default_layout | {
-    "margin": dict(l=0, r=0, t=40, b=0),
+    "margin": {"l": 0, "r": 0, "t": 40, "b": 0},
 }
 
 
@@ -83,8 +91,8 @@ def _ensure_kaleido_chrome() -> None:
 def process_export_file(
         fig: go.Figure, 
         export_file: FilePath, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,         
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,         
+        export_fig_size_in: tuple[float | int, float | int] | None = None,
         dpi = 600
         ) -> None:
 
@@ -136,9 +144,9 @@ def process_export_file(
 
 
 def validate_plot_args(
-        export_fig_path: Optional[FilePath], 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None
+        export_fig_path: FilePath | None, 
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,
+        export_fig_size_in: tuple[float | int, float | int] | None = None
         ) -> None:
 
     if export_fig_path is not None:
@@ -152,14 +160,14 @@ def validate_plot_args(
 def metric_plot(
         metric: ComparisonMetric, 
         metric_results_df: pd.DataFrame, 
-        plot_groups: Optional[Sequence[str]] = None,
-        fig_title: Optional[str] = None,
-        cmap: Optional[Sequence[str]] = None, 
+        plot_groups: Sequence[str] | None = None,
+        fig_title: str | None = None,
+        cmap: Sequence[str] | None = None, 
         sort_groups_by_metric: bool = True,
         figure: bool = True,
-    export_fig_path: Optional[FilePath] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
+    export_fig_path: FilePath | None = None, 
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,
+        export_fig_size_in: tuple[float | int, float | int] | None = None,
         return_group_color_dict: bool = False
         ) -> go.Figure | list[BaseTraceType] | tuple[go.Figure | list[BaseTraceType], dict]:
 
@@ -202,16 +210,16 @@ def metric_plot(
             x=[x_values[idx]],  
             y=[metric_val],
             mode='markers', 
-            error_y=dict(
-                type='data',
-                array=[upper_errors[idx]],
-                arrayminus=[lower_errors[idx]],
-                color=color
-            ),
-            marker=dict(
-                color=color,
-                size=10
-            ),
+            error_y={
+                "type": 'data',
+                "array": [upper_errors[idx]],
+                "arrayminus": [lower_errors[idx]],
+                "color": color
+            },
+            marker={
+                "color": color,
+                "size": 10
+            },
             hovertext=hover_text,
             hoverinfo="text",
             showlegend=False
@@ -246,7 +254,7 @@ def metric_plot(
                 hovertext=hover_text,
                 hoverinfo="text",
                 showlegend=False,
-                line=dict(color=color, width=1, dash='dash')
+                line={"color": color, "width": 1, "dash": 'dash'}
             )
 
             traces.append(trace)
@@ -302,15 +310,15 @@ def metric_plot(
     fig.update_layout(**(default_layout_no_title if fig_title is None else default_layout_with_title))
     fig.update_layout(
         title=fig_title,
-        xaxis=dict(
-            tickmode='array',
-            tickvals=list(range(len(metric_results_df))),
-            ticktext=list(group_names),
-            automargin=True),
-        yaxis=dict(
-            title=metric.metric_name,
-            automargin=True,
-        )
+        xaxis={
+            "tickmode": 'array',
+            "tickvals": list(range(len(metric_results_df))),
+            "ticktext": list(group_names),
+            "automargin": True},
+        yaxis={
+            "title": metric.metric_name,
+            "automargin": True,
+        }
     )
 
     if export_fig_path is not None:
@@ -330,16 +338,16 @@ def metric_plot(
 
 def rel_diag(
         test_df: pd.DataFrame, 
-        plot_groups: Optional[Sequence[str]] = None, 
-        fig_title: Optional[str] = "Reliability Diagram", 
-        group_color_dict: Optional[dict[str, str]] = None, 
+        plot_groups: Sequence[str] | None = None, 
+        fig_title: str | None = "Reliability Diagram", 
+        group_color_dict: dict[str, str] | None = None, 
         add_risk_density: bool = True, 
-        cmap: Optional[Sequence[str]] = None,
+        cmap: Sequence[str] | None = None,
         legend: bool = True, 
-        threshold: Optional[float] = None,
-    export_fig_path: Optional[FilePath] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None,
+        threshold: float | None = None,
+    export_fig_path: FilePath | None = None, 
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,
+        export_fig_size_in: tuple[float | int, float | int] | None = None,
         log_density: bool = True
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
     
@@ -365,7 +373,7 @@ def rel_diag(
 
         # Add calibration curve
         traces.append(go.Scatter(x=xvals, y=calib_probs, mode='lines', name="Calibration Curve", 
-                                 line=dict(color=rgb_color), showlegend=True))
+                                 line={"color": rgb_color}, showlegend=True))
 
         # Add confidence interval
         traces.append(go.Scatter(
@@ -374,7 +382,7 @@ def rel_diag(
                               ci_nan_quantile(calib_probs_samples, 1 - (1 - settings.ci_alpha) / 2, axis=1)[::-1]]),  # type: ignore
             fill='toself',
             fillcolor=rgb_color,
-            line=dict(color='rgba(255,255,255,0)'),
+            line={"color": 'rgba(255,255,255,0)'},
             opacity=settings.ci_plot_alpha,
             showlegend=False
         ))
@@ -417,7 +425,7 @@ def rel_diag(
                         x=xvals,
                         y=calib_probs,
                         mode='lines',
-                        line=dict(color=rgb_color),
+                        line={"color": rgb_color},
                         name=group_name,
                     ))
 
@@ -427,7 +435,7 @@ def rel_diag(
                         y=np.concatenate([ci_nan_quantile(calib_probs_samples, (1 - settings.ci_alpha) / 2, axis=1),
                                         ci_nan_quantile(calib_probs_samples, 1 - (1 - settings.ci_alpha) / 2, axis=1)[::-1]]), # type: ignore
                         fill='toself',
-                        line=dict(color='rgba(255,255,255,0)'),
+                        line={"color": 'rgba(255,255,255,0)'},
                         fillcolor=rgb_color,
                         opacity=settings.ci_plot_alpha,
                         showlegend=False
@@ -456,7 +464,7 @@ def rel_diag(
         x=[0, 1],
         y=[0, 1],
         mode='lines',
-        line=dict(dash='dash', color='black'),
+        line={"dash": 'dash', "color": 'black'},
         name="Ideal",
     ))
 
@@ -465,7 +473,7 @@ def rel_diag(
             x=[threshold, threshold],
             y=[0, 1],
             mode='lines',
-            line=dict(dash='dash', color='gray'),
+            line={"dash": 'dash', "color": 'gray'},
             name="Threshold",
         )) 
 
@@ -475,21 +483,21 @@ def rel_diag(
     layout_kwargs = {
         'title': fig_title,
         'showlegend': legend,
-        'xaxis': dict(
-            title='$\\text{Risk Score } R$',
-            range=[-0.05, 1.05],
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1]),
-        'yaxis': dict(
-            title='$P(Y | R, G)$',
-            range=[-0.05, 1.05],
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1]),
-        'yaxis2': dict(title="Log Density" if log_density else "Density"),     
+        'xaxis': {
+            "title": '$\\text{Risk Score } R$',
+            "range": [-0.05, 1.05],
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1]},
+        'yaxis': {
+            "title": '$P(Y | R, G)$',
+            "range": [-0.05, 1.05],
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1]},
+        'yaxis2': {"title": "Log Density" if log_density else "Density"},     
     } | (default_layout_no_title if fig_title is None else default_layout_with_title)
 
     fig.update_layout(**layout_kwargs)
 
-    fig.add_trace(go.Scatter(x=[0.95], y=[0.05], text=['over-confident'], mode='text', textfont=dict(style='italic'), showlegend=False, textposition="top left"))
-    fig.add_trace(go.Scatter(x=[0.05], y=[0.95], text=['under-confident'], mode='text', textfont=dict(style='italic'), showlegend=False, textposition="bottom right"))
+    fig.add_trace(go.Scatter(x=[0.95], y=[0.05], text=['over-confident'], mode='text', textfont={"style": 'italic'}, showlegend=False, textposition="top left"))
+    fig.add_trace(go.Scatter(x=[0.05], y=[0.95], text=['under-confident'], mode='text', textfont={"style": 'italic'}, showlegend=False, textposition="bottom right"))
     
     if export_fig_path is not None:
         process_export_file(fig, export_fig_path, export_fig_size_in=export_fig_size_in, export_fig_size_cm=export_fig_size_cm)
@@ -500,9 +508,9 @@ def rel_diag(
 def curve_diag(
         test_df: pd.DataFrame, 
     bootstrap_curve_fun: Callable[[BoolArray, FloatArray, int], tuple[FloatArray, FloatArray, FloatArray]],
-        plot_groups: Optional[Sequence[str]] = None, 
-        group_color_dict: Optional[dict[str, str]] = None, 
-        cmap: Optional[Sequence[str]] = None
+        plot_groups: Sequence[str] | None = None, 
+        group_color_dict: dict[str, str] | None = None, 
+        cmap: Sequence[str] | None = None
         ) -> list[BaseTraceType]:
 
     traces = []
@@ -525,7 +533,7 @@ def curve_diag(
                 x=x,
                 y=y,
                 mode='lines',
-                line=dict(color=rgb_color),
+                line={"color": rgb_color},
                 name="all",
                 showlegend=True,
                 visible=True
@@ -541,7 +549,7 @@ def curve_diag(
                 fill='toself',
                 fillcolor=rgb_color,
                 opacity=settings.ci_plot_alpha,
-                line=dict(color=rgb_color),
+                line={"color": rgb_color},
                 showlegend=False
             ))
     else:
@@ -569,7 +577,7 @@ def curve_diag(
                             x=x,    
                             y=y,
                             mode='lines',
-                            line=dict(color=cmap[idx]),
+                            line={"color": cmap[idx]},
                             name=group_name,
                             hovertext=group_name,
                             hoverinfo="text",
@@ -587,7 +595,7 @@ def curve_diag(
                             fill='toself',
                             fillcolor=cmap[idx],
                             opacity=settings.ci_plot_alpha,
-                            line=dict(color='rgba(255,255,255,0)'),
+                            line={"color": 'rgba(255,255,255,0)'},
                             name=f"{group_name} CI",
                             hovertext=group_name,
                             hoverinfo="text",
@@ -605,7 +613,7 @@ def add_thresh_marker(traces, x, y, color, thresh):
         x=[x],
         y=[y],
         mode='markers',
-        marker=dict(size=10, color=color, symbol='circle-dot'),
+        marker={"size": 10, "color": color, "symbol": 'circle-dot'},
         marker_line_width=1,
         marker_line_color="black",
         name=f'Threshold {thresh:.2f}',
@@ -615,14 +623,14 @@ def add_thresh_marker(traces, x, y, color, thresh):
 
 def roc_diag(
         test_df: pd.DataFrame, 
-        plot_groups: Optional[Sequence[str]] = None, 
-        fig_title: Optional[str] = 'ROC Diagram', 
-        group_color_dict: Optional[dict[str, str]] = None,
+        plot_groups: Sequence[str] | None = None, 
+        fig_title: str | None = 'ROC Diagram', 
+        group_color_dict: dict[str, str] | None = None,
         legend: bool = True,
-        threshold: Optional[float] = None,
-    export_fig_path: Optional[FilePath] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None
+        threshold: float | None = None,
+    export_fig_path: FilePath | None = None,
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,
+        export_fig_size_in: tuple[float | int, float | int] | None = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
 
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
@@ -636,7 +644,7 @@ def roc_diag(
         x=[0, 1],
         y=[0, 1],
         mode='lines',
-        line=dict(dash='dash', color='black'),
+        line={"dash": 'dash', "color": 'black'},
         name="Random Classifier",
         legendgroup="Random Classifier",
         showlegend=True
@@ -672,16 +680,16 @@ def roc_diag(
     fig.add_traces(traces)
 
     layout_kwargs = {
-        'xaxis': dict(
-            title="False Positive Rate",
-            range=[-0.05, 1.05],
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1]
-        ),
-        'yaxis': dict(
-            title="True Positive Rate",
-            range=[-0.05, 1.05],
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1]
-        ),
+        'xaxis': {
+            "title": "False Positive Rate",
+            "range": [-0.05, 1.05],
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1]
+        },
+        'yaxis': {
+            "title": "True Positive Rate",
+            "range": [-0.05, 1.05],
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1]
+        },
         'title': fig_title,
         'showlegend': legend,
     } | (default_layout_no_title if fig_title is None else default_layout_with_title)
@@ -696,14 +704,14 @@ def roc_diag(
 
 def pr_diag(
         test_df: pd.DataFrame, 
-        plot_groups: Optional[Sequence[str]] = None,
-        fig_title: Optional[str] = 'Precision-Recall Diagram',
-        group_color_dict: Optional[dict[str, str]] = None,
+        plot_groups: Sequence[str] | None = None,
+        fig_title: str | None = 'Precision-Recall Diagram',
+        group_color_dict: dict[str, str] | None = None,
         legend: bool = True,
-        threshold: Optional[float] = None,
-    export_fig_path: Optional[FilePath] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None
+        threshold: float | None = None,
+    export_fig_path: FilePath | None = None,
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,
+        export_fig_size_in: tuple[float | int, float | int] | None = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
     
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
@@ -741,7 +749,7 @@ def pr_diag(
             x=rec,
             y=prec_baseline,
             mode='lines',
-            line=dict(color='black', dash='dash'),
+            line={"color": 'black', "dash": 'dash'},
             name="$F_1 \\text{ baseline}$"
         ))
 
@@ -775,7 +783,7 @@ def pr_diag(
                     x=rec,
                     y=prec_baseline,
                     mode='lines',
-                    line=dict(color=cmap[idx], dash='dash'),
+                    line={"color": cmap[idx], "dash": 'dash'},
                     name="$F_1 \\text{ baseline " + group_name + "}$"
                 ))
 
@@ -809,16 +817,16 @@ def pr_diag(
 
     layout_kwargs = {
         'title': fig_title,
-        'xaxis': dict(
-            title="Recall",
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1],
-            range=[-0.05, 1.05]
-        ),
-        'yaxis': dict(
-            title="Precision",
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1],
-            range=[-0.05, 1.05]
-        ),
+        'xaxis': {
+            "title": "Recall",
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1],
+            "range": [-0.05, 1.05]
+        },
+        'yaxis': {
+            "title": "Precision",
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1],
+            "range": [-0.05, 1.05]
+        },
         'showlegend': legend,
     } | (default_layout_no_title if fig_title is None else default_layout_with_title)
 
@@ -832,15 +840,15 @@ def pr_diag(
 
 def prg_diag(
         test_df: pd.DataFrame,
-        plot_groups: Optional[Sequence[str]] = None,
-        fig_title: Optional[str] = 'Precision-Recall-Gain Diagram',
-        group_color_dict: Optional[dict[str, str]] = None,
+        plot_groups: Sequence[str] | None = None,
+        fig_title: str | None = 'Precision-Recall-Gain Diagram',
+        group_color_dict: dict[str, str] | None = None,
         legend: bool = True,
-        threshold: Optional[float] = None,
+        threshold: float | None = None,
         rec_gain_min: float = 0,
-    export_fig_path: Optional[FilePath] = None,
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,   
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None
+    export_fig_path: FilePath | None = None,
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,   
+        export_fig_size_in: tuple[float | int, float | int] | None = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
     
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
@@ -854,7 +862,7 @@ def prg_diag(
         x=[0, 1],
         y=[1, 0],
         mode='lines',
-        line=dict(color='black', dash='dash'),
+        line={"color": 'black', "dash": 'dash'},
         name="$F_1$ baseline"
     ))
 
@@ -889,33 +897,33 @@ def prg_diag(
 
     # Add vertical and horizontal reference lines
     fig.add_shape(type="line", x0=rec_gain_min, x1=rec_gain_min, y0=-0.05, y1=1,
-                  line=dict(color="black", width=1),
+                  line={"color": "black", "width": 1},
                   xref='x', yref='y')
 
     fig.add_shape(type="line", x0=-0.05, x1=1, y0=0, y1=0,
-                  line=dict(color="black", width=1),
+                  line={"color": "black", "width": 1},
                 xref='x', yref='y')
 
     fig.add_shape(type="line", x0=1, x1=1, y0=0, y1=1,
-                  line=dict(color="black", width=1),
+                  line={"color": "black", "width": 1},
                   xref='x', yref='y')
 
     fig.add_shape(type="line", x0=0, x1=1, y0=1, y1=1,
-                  line=dict(color="black", width=1),
+                  line={"color": "black", "width": 1},
                   xref='x', yref='y')
 
     layout_kwargs = {
         'title': fig_title,
-        'xaxis': dict(
-            title='Recall Gain',
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1],
-            range=[-0.05, 1.05]
-        ),
-        'yaxis': dict(
-            title='Precision Gain',
-            tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1],
-            range=[-0.05, 1.05]
-        ),
+        'xaxis': {
+            "title": 'Recall Gain',
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1],
+            "range": [-0.05, 1.05]
+        },
+        'yaxis': {
+            "title": 'Precision Gain',
+            "tickvals": [0, 0.2, 0.4, 0.6, 0.8, 1],
+            "range": [-0.05, 1.05]
+        },
         'showlegend': legend, 
     } | (default_layout_no_title if fig_title is None else default_layout_with_title)
 
@@ -931,13 +939,13 @@ def plot_metric_overview(
         metrics: Sequence[ComparisonMetric],
         metric_results_df: pd.DataFrame, 
         plot_groups: Sequence[str],
-        test_df: Optional[pd.DataFrame] = None, 
+        test_df: pd.DataFrame | None = None, 
         add_risk_plot: bool = False,
-    export_fig_path: Optional[FilePath] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None, 
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None, 
+    export_fig_path: FilePath | None = None, 
+        export_fig_size_cm: tuple[float | int, float | int] | None = None, 
+        export_fig_size_in: tuple[float | int, float | int] | None = None, 
         log_density: bool = True,
-        threshold: Optional[float] = None
+        threshold: float | None = None
         ) -> go.Figure:
     
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
@@ -1072,7 +1080,7 @@ def plot_metric_overview(
         trace = go.Bar(
             x=metric_results_df.index.tolist(),  # Group names
             y=metric_results_df.loc[plot_groups, "Count"], 
-            marker=dict(color=[cmap[idx] for idx in range(len(plot_groups))]),
+            marker={"color": [cmap[idx] for idx in range(len(plot_groups))]},
             width=0.8,
             showlegend=False
         )
@@ -1155,7 +1163,7 @@ def plot_metric_overview(
         barmode='group',
         height=rows * 250,
         width=cols * 450,
-        margin=dict(l=0, r=0, t=0, b=0),
+        margin={"l": 0, "r": 0, "t": 0, "b": 0},
         template="plotly_white"
     )
 
@@ -1185,11 +1193,11 @@ def get_cmap(num_groups: int) -> list[str]:
 def volcano_plot(
         metric_results_df: pd.DataFrame, 
         metric: ComparisonMetric,
-        fig_title: Optional[str] = None,
+        fig_title: str | None = None,
         figure: bool = True,
-    export_fig_path: Optional[FilePath] = None, 
-        export_fig_size_cm: Optional[tuple[float | int, float | int]] = None,
-        export_fig_size_in: Optional[tuple[float | int, float | int]] = None
+    export_fig_path: FilePath | None = None, 
+        export_fig_size_cm: tuple[float | int, float | int] | None = None,
+        export_fig_size_in: tuple[float | int, float | int] | None = None
         ) -> go.Figure | list[BaseTraceType]:
 
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
@@ -1207,10 +1215,10 @@ def volcano_plot(
         x=metric_results_df.loc[msk, metric.metric_name_effect],
         y=-np.log10(metric_results_df.loc[msk, metric.metric_name_pval]),
         mode='markers',
-        marker=dict(
-            color="black",
-            size=10
-        ),
+        marker={
+            "color": "black",
+            "size": 10
+        },
         hovertext=metric_results_df[msk].index,
         hoverinfo="text",
         showlegend=False
@@ -1221,13 +1229,13 @@ def volcano_plot(
     fig.update_layout(**(default_layout_no_title if fig_title is None else default_layout_with_title))
     fig.update_layout(
         title=fig_title,
-        xaxis=dict(
-            title='Metric difference group vs. complement',
-            automargin=True),
-        yaxis=dict(
-            title='-log10(pval)',
-            automargin=True
-        ),
+        xaxis={
+            "title": 'Metric difference group vs. complement',
+            "automargin": True},
+        yaxis={
+            "title": '-log10(pval)',
+            "automargin": True
+        },
         height=450,
         width=600,
     )

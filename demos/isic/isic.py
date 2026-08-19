@@ -2,23 +2,23 @@
 # https://challenge.isic-archive.com/data/#2020
 # https://www.kaggle.com/c/siim-isic-melanoma-classification/data
 
+import multiprocessing
 import os.path
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
+import pandas as pd
 import torch
-import torchvision
-import torchvision.transforms.v2 as transforms
 import torch.nn as nn
 import torch.optim as optim
-from torchvision.models import resnet50
-from torcheval.metrics import BinaryAccuracy, BinaryAUROC
-from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor
-import multiprocessing
-import pandas as pd
-from tqdm import tqdm
+import torchvision
+import torchvision.transforms.v2 as transforms
 from PIL import Image
-
-from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import GroupShuffleSplit
+from torch.utils.tensorboard import SummaryWriter
+from torcheval.metrics import BinaryAccuracy, BinaryAUROC
+from torchvision.models import resnet50
+from tqdm import tqdm
 
 dtypes = {
     'sex': pd.CategoricalDtype(),

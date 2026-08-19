@@ -1,14 +1,15 @@
 import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from meval import compare_groups
 from meval.config import settings
+from meval.metrics.Accuracy import Accuracy
 from meval.metrics.AUROC import AUROC
 from meval.metrics.ComparisonMetric import ComparisonMetric
 from meval.metrics.MAE import MAE
-from meval.metrics.Accuracy import Accuracy
 
 
 def _build_df() -> pd.DataFrame:

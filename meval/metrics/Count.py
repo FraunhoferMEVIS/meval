@@ -1,9 +1,10 @@
-from typing import Optional
-import pandas as pd
 
 import numpy as np
-from .ComparisonMetric import ComparisonMetric, MaskLike
+import pandas as pd
+
 from ..group_filter import GroupFilter
+from .ComparisonMetric import ComparisonMetric, MaskLike
+
 
 class Count(ComparisonMetric):
 
@@ -21,8 +22,8 @@ class Count(ComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> int:
         

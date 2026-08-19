@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Sequence
+
 import numpy as np
 import pandas as pd
 import pandera.pandas as pa
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseTraceType
-from ..group_filter import GroupFilter
+
 from .._array_types import MaskLike
+from ..group_filter import GroupFilter
 
 
 class ComparisonMetric(ABC):
@@ -60,8 +62,8 @@ class ComparisonMetric(ABC):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
         raise NotImplementedError
@@ -78,8 +80,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def _get_group_mask(
             df: pd.DataFrame, 
-            group_filter: Optional[GroupFilter] = None, 
-            mask: Optional[MaskLike] = None,
+            group_filter: GroupFilter | None = None, 
+            mask: MaskLike | None = None,
             validate: bool = True
             ) -> MaskLike:
 
@@ -101,7 +103,7 @@ class ComparisonMetric(ABC):
         return matches[0]
 
     @staticmethod
-    def _masked_series(col: pd.Series, mask: Optional[MaskLike]) -> pd.Series:
+    def _masked_series(col: pd.Series, mask: MaskLike | None) -> pd.Series:
         if mask is None:
             return col
 
@@ -129,7 +131,7 @@ class ComparisonMetric(ABC):
         return col[mask]
 
     @staticmethod
-    def _masked_array(col: pd.Series, mask: Optional[MaskLike]) -> np.ndarray:
+    def _masked_array(col: pd.Series, mask: MaskLike | None) -> np.ndarray:
         if mask is None:
             return col.to_numpy(copy=False)
 
@@ -153,7 +155,7 @@ class ComparisonMetric(ABC):
         return col[mask].to_numpy(copy=False)
 
     @staticmethod
-    def _masked_frame(df: pd.DataFrame, mask: Optional[MaskLike]) -> pd.DataFrame:
+    def _masked_frame(df: pd.DataFrame, mask: MaskLike | None) -> pd.DataFrame:
         if mask is None:
             return df
 
@@ -186,8 +188,8 @@ class ComparisonMetric(ABC):
     def get_group_mask(
             self, 
             df: pd.DataFrame, 
-            group_filter: Optional[GroupFilter] = None, 
-            group_mask: Optional[MaskLike] = None,
+            group_filter: GroupFilter | None = None, 
+            group_mask: MaskLike | None = None,
             validate: bool = True
             ) -> MaskLike:
         if validate:
@@ -202,8 +204,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_y_true(
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
         ) -> pd.Series | np.ndarray:
@@ -221,8 +223,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_binary_y_true(
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
         ) -> pd.Series | np.ndarray:
@@ -251,8 +253,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_float_y_true(
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
         ) -> pd.Series | np.ndarray:
@@ -275,8 +277,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_multiclass_y_true(
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
         ) -> pd.Series | np.ndarray:
@@ -306,8 +308,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_binary_y_pred_prob(
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
         ) -> pd.Series | np.ndarray:
@@ -353,8 +355,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_multiclass_y_pred_prob(
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
         ) -> pd.DataFrame | np.ndarray:
@@ -393,8 +395,8 @@ class ComparisonMetric(ABC):
     def get_binary_y_pred(
             self, 
             df: pd.DataFrame, 
-            group_filter: Optional[GroupFilter] = None,
-            mask: Optional[MaskLike] = None,
+            group_filter: GroupFilter | None = None,
+            mask: MaskLike | None = None,
             validate: bool = True,
             return_array: bool = False,
             ) -> pd.Series | np.ndarray:
@@ -423,8 +425,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_multiclass_y_pred(
             df: pd.DataFrame,
-            group_filter: Optional[GroupFilter] = None,
-            mask: Optional[MaskLike] = None,
+            group_filter: GroupFilter | None = None,
+            mask: MaskLike | None = None,
             validate: bool = True,
             return_array: bool = False,
             ) -> pd.Series | np.ndarray:
@@ -471,8 +473,8 @@ class ComparisonMetric(ABC):
     @staticmethod
     def get_float_y_pred(
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
         ) -> pd.Series | np.ndarray:
@@ -527,7 +529,7 @@ class CurveBasedComparisonMetric(ComparisonMetric):
             is_descriptive: bool,
             test: bool = False,
             direction: str = "N/A",
-            curve_family: Optional[str] = None,
+            curve_family: str | None = None,
     ):
         super().__init__(req_cols=req_cols,
                          metric_name=metric_name,
@@ -550,9 +552,9 @@ class CurveBasedComparisonMetric(ComparisonMetric):
         self, 
         metric_results_df: pd.DataFrame, 
         test_df: pd.DataFrame, 
-        group_colors_dict: Optional[dict[str, str]] = None,
+        group_colors_dict: dict[str, str] | None = None,
         add_all_group: bool = True,
-        threshold: Optional[float] = None
+        threshold: float | None = None
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
         raise NotImplementedError
     
@@ -563,8 +565,8 @@ class MetricWithAnalyticalCI(ComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True,
         return_ci: bool = False
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
@@ -574,14 +576,14 @@ class MetricWithAnalyticalCI(ComparisonMetric):
     def get_ci(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         ci_alpha: float = 0.95,
         validate: bool = True,
-        y_true: Optional[pd.Series | np.ndarray] = None,
-        y_pred: Optional[pd.Series | np.ndarray] = None,
-        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
-        return_val: Optional[bool] = False
+        y_true: pd.Series | np.ndarray | None = None,
+        y_pred: pd.Series | np.ndarray | None = None,
+        y_pred_prob: pd.Series | np.ndarray | None = None,
+        return_val: bool | None = False
         ) -> tuple[float, float] | tuple[int, tuple[float, float]] | tuple[float, tuple[float, float]]:
         raise NotImplementedError
     
@@ -592,8 +594,8 @@ class MetricWithAnalyticalVar(ComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True,
         return_var: bool = False
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
@@ -603,26 +605,26 @@ class MetricWithAnalyticalVar(ComparisonMetric):
     def get_variance(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True,
-        y_true: Optional[pd.Series | np.ndarray] = None,
-        y_pred: Optional[pd.Series | np.ndarray] = None,
-        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
-        return_val: Optional[bool] = False
+        y_true: pd.Series | np.ndarray | None = None,
+        y_pred: pd.Series | np.ndarray | None = None,
+        y_pred_prob: pd.Series | np.ndarray | None = None,
+        return_val: bool | None = False
         ) -> float | tuple[float, float] | tuple[int, float]:
         raise NotImplementedError
 
 
 class ThresholdedComparisonMetric(ComparisonMetric):
 
-    threshold: Optional[float] = None
+    threshold: float | None = None
 
-    def __init__(self, threshold: Optional[float] = None, **kwargs):
+    def __init__(self, threshold: float | None = None, **kwargs):
         super().__init__(**kwargs)
         self.set_threshold(threshold)
 
-    def set_threshold(self, threshold: Optional[float]):
+    def set_threshold(self, threshold: float | None):
 
         if threshold is not None:
             assert self.threshold is None

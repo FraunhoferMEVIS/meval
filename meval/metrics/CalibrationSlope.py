@@ -1,16 +1,21 @@
-from typing import Optional
-from plotly.basedatatypes import BaseTraceType
-import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.basedatatypes import BaseTraceType
 
-from .ComparisonMetric import ComparisonMetric, CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar, MaskLike
-from ._calibration import fit_calibration_slope_intercept, wald_ci
 from ..config import settings
 from ..diags import rel_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
 from ..stats.cache import shared_computation
+from ._calibration import fit_calibration_slope_intercept, wald_ci
+from .ComparisonMetric import (
+    ComparisonMetric,
+    CurveBasedComparisonMetric,
+    MaskLike,
+    MetricWithAnalyticalCI,
+    MetricWithAnalyticalVar,
+)
 
 
 class CalibrationSlope(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyticalVar):
@@ -55,7 +60,7 @@ class CalibrationSlope(CurveBasedComparisonMetric, MetricWithAnalyticalCI, Metri
             curve_family="reliability",
         )
 
-    def _get_fit(self, df: pd.DataFrame, group_filter: Optional[GroupFilter], mask: MaskLike, validate: bool):
+    def _get_fit(self, df: pd.DataFrame, group_filter: GroupFilter | None, mask: MaskLike, validate: bool):
         """
         Fetch this group's shared CalibrationFit (see _calibration.py), computing
         it on first access and reusing it on subsequent calls and across
@@ -82,8 +87,8 @@ class CalibrationSlope(CurveBasedComparisonMetric, MetricWithAnalyticalCI, Metri
     def __call__(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
         """
@@ -103,11 +108,11 @@ class CalibrationSlope(CurveBasedComparisonMetric, MetricWithAnalyticalCI, Metri
     def get_ci(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         ci_alpha: float = 0.95,
         validate: bool = True,
-        return_val: Optional[bool] = False,
+        return_val: bool | None = False,
         ) -> tuple[float, float] | tuple[float, tuple[float, float]]:
         """
         Analytical Wald confidence interval for the calibration slope,
@@ -135,10 +140,10 @@ class CalibrationSlope(CurveBasedComparisonMetric, MetricWithAnalyticalCI, Metri
     def get_variance(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True,
-        return_val: Optional[bool] = False,
+        return_val: bool | None = False,
         ) -> float | tuple[float, float]:
         """
         Analytical variance of the calibration slope, read off the logistic
@@ -165,9 +170,9 @@ class CalibrationSlope(CurveBasedComparisonMetric, MetricWithAnalyticalCI, Metri
             self,
             metric_results_df: pd.DataFrame,
             test_df: pd.DataFrame,
-            group_colors_dict: Optional[dict[str, str]] = None,
+            group_colors_dict: dict[str, str] | None = None,
             add_all_group: bool = True,
-            threshold: Optional[float] = None,
+            threshold: float | None = None,
             ) -> tuple[go.Figure, list[BaseTraceType], dict]:
         """
         Reliability diagram for the groups with the most extreme calibration

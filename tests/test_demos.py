@@ -1,13 +1,15 @@
 # Settings must be changed before importing anything else from meval!
 from meval.config import settings
+
 settings.load_testing_config(parallel=True)
+
+import os
+from contextlib import contextmanager
+from pathlib import Path
 
 from demos.isic.demo import isic_demo
 from demos.mimic.demo import mimic_demo
 
-import os
-from pathlib import Path
-from contextlib import contextmanager
 
 @contextmanager
 def working_directory(path):

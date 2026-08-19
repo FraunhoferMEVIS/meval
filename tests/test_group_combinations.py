@@ -1,7 +1,8 @@
+import numpy as np
 import pandas as pd
 import pytest
+
 from meval.compare_groups import get_group_combinations
-import numpy as np
 
 
 def unordered_lists_of_dicts_equal(lst1, lst2):

@@ -1,15 +1,20 @@
-from typing import Optional
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from ._metrics import accuracy
-from .ComparisonMetric import ComparisonMetric, MetricWithAnalyticalVar, MetricWithAnalyticalCI, ThresholdedComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
-from ..stats.confidence_intervals import variance_of_proportion, proportion_confint
+from ..stats.confidence_intervals import proportion_confint, variance_of_proportion
+from ._metrics import accuracy
+from .ComparisonMetric import (
+    ComparisonMetric,
+    MaskLike,
+    MetricWithAnalyticalCI,
+    MetricWithAnalyticalVar,
+    ThresholdedComparisonMetric,
+)
 
 
 class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithAnalyticalCI):
-    def __init__(self, threshold: Optional[float] = None, test: bool = False):
+    def __init__(self, threshold: float | None = None, test: bool = False):
         super().__init__(
             threshold=threshold,
             req_cols=[ComparisonMetric.y_true_cols, ComparisonMetric.y_pred_cols],
@@ -24,8 +29,8 @@ class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithA
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True,
         return_ci: bool = False,
         return_var: bool = False
@@ -57,13 +62,13 @@ class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithA
     def get_variance(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True,
-        y_true: Optional[pd.Series | np.ndarray] = None,
-        y_pred: Optional[pd.Series | np.ndarray] = None,
-        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
-        return_val: Optional[bool] = False
+        y_true: pd.Series | np.ndarray | None = None,
+        y_pred: pd.Series | np.ndarray | None = None,
+        y_pred_prob: pd.Series | np.ndarray | None = None,
+        return_val: bool | None = False
         ) -> float | tuple[float, float]:
 
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
@@ -85,14 +90,14 @@ class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithA
     def get_ci(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         ci_alpha: float = 0.95,
         validate: bool = True,
-        y_true: Optional[pd.Series | np.ndarray] = None,
-        y_pred: Optional[pd.Series | np.ndarray] = None,
-        y_pred_prob: Optional[pd.Series | np.ndarray] = None,
-        return_val: Optional[bool] = False
+        y_true: pd.Series | np.ndarray | None = None,
+        y_pred: pd.Series | np.ndarray | None = None,
+        y_pred_prob: pd.Series | np.ndarray | None = None,
+        return_val: bool | None = False
         ) -> tuple[float, float] | tuple[float, tuple[float, float]]:
 
         mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)

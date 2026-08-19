@@ -1,15 +1,15 @@
-from typing import Optional
+
 import numpy as np
 import pandas as pd
 
-from ._metrics import recall
-from .ComparisonMetric import ComparisonMetric, ThresholdedComparisonMetric, MaskLike
 from ..group_filter import GroupFilter
+from ._metrics import recall
+from .ComparisonMetric import ComparisonMetric, MaskLike, ThresholdedComparisonMetric
 
 
 class Recall(ThresholdedComparisonMetric):
 
-    def __init__(self, threshold: Optional[float] = None, test: bool = False, per_class: bool = False):
+    def __init__(self, threshold: float | None = None, test: bool = False, per_class: bool = False):
 
         self.per_class = per_class
 
@@ -47,8 +47,8 @@ class Recall(ThresholdedComparisonMetric):
     def __call__(
         self, 
         df: pd.DataFrame, 
-        group_filter: Optional[GroupFilter] = None, 
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None, 
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float | int | tuple[float, float] | tuple[int, float] | tuple[float, tuple[float, float]] | tuple[int, tuple[float, float]]:
         
@@ -78,8 +78,8 @@ class _PerClassRecall(ComparisonMetric):
     def __call__(
         self,
         df: pd.DataFrame,
-        group_filter: Optional[GroupFilter] = None,
-        group_mask: Optional[MaskLike] = None,
+        group_filter: GroupFilter | None = None,
+        group_mask: MaskLike | None = None,
         validate: bool = True
         ) -> float:
 
