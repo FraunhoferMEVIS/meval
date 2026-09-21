@@ -6,7 +6,6 @@ from confidenceinterval.delong import delong_roc_variance
 from plotly.basedatatypes import BaseTraceType
 
 from ..config import settings
-from ..diags import roc_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
 from ..stats.confidence_intervals import newcombe_auroc_ci
@@ -158,6 +157,8 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
         plot_groups_roc = select_extreme_groups(metric_results_df, 
                                                 cols={self.metric_name_low: False, self.metric_name_high: True},
                                                 n_groups=3, add_all_group=add_all_group, sort=True)
+        from ..diags import roc_diag
+
         fig, roc_traces, layout_kwargs = roc_diag(test_df, plot_groups=plot_groups_roc, group_color_dict=group_colors_dict, legend=False, threshold=threshold)
         return fig, roc_traces, layout_kwargs
     

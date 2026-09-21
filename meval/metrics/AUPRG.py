@@ -2,7 +2,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseTraceType
 
-from ..diags import prg_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
 from ._metrics import area_under_precision_recall_gain_score
@@ -56,6 +55,8 @@ class AUPRG(CurveBasedComparisonMetric):
         plot_groups_prg = select_extreme_groups(metric_results_df, 
                                                 cols={self.metric_name_low: False, self.metric_name_high: True},
                                                 n_groups=3, add_all_group=add_all_group, sort=True)
+        from ..diags import prg_diag
+
         fig, prg_traces, layout_kwargs = prg_diag(test_df, plot_groups_prg, group_color_dict=group_colors_dict, legend=False, fig_title='',
                                                   rec_gain_min=self.rec_gain_min, threshold=threshold)
         return fig, prg_traces, layout_kwargs

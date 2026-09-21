@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseTraceType
 
-from ..diags import rel_diag
 from ..group_filter import GroupFilter
 from ..select_groups import select_extreme_groups
 from ._calibration import get_unbiased_calibration_rmse
@@ -53,6 +52,8 @@ class DRMSCE(CurveBasedComparisonMetric):
         plot_groups_rel = select_extreme_groups(metric_results_df, 
                                                 cols={self.metric_name_low: False, self.metric_name_high: True},
                                                 n_groups=3, add_all_group=add_all_group, sort=True)
+        from ..diags import rel_diag
+
         fig, rel_traces, layout_kwargs = rel_diag(test_df, plot_groups_rel, group_color_dict=group_colors_dict, add_risk_density=False,
                                                   legend=False, fig_title=None, threshold=threshold)
         return fig, rel_traces, layout_kwargs

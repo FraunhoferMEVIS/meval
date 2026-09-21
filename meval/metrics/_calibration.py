@@ -745,7 +745,7 @@ def mean_reference_logit(y_pred_prob: FloatArray, eps: float = eps) -> float:
     return float(np.mean(scipy_logit(np.clip(y_pred_prob, eps, 1 - eps))))
 
 
-def calibration_bias_at_reference(fit: CalibrationFit, reference_logit: float) -> Tuple[float, float]:
+def calibration_bias_at_reference(fit: CalibrationFit, reference_logit: float) -> tuple[float, float]:
     """
     Evaluate a fitted recalibration model's *calibration bias* at a given
     reference point, together with its variance.
@@ -780,7 +780,7 @@ def calibration_bias_at_reference(fit: CalibrationFit, reference_logit: float) -
     return delta, variance
 
 
-def wald_ci(estimate: float, variance: float, ci_alpha: float = 0.95) -> Tuple[float, float]:
+def wald_ci(estimate: float, variance: float, ci_alpha: float = 0.95) -> tuple[float, float]:
     """
     Symmetric normal-approximation (Wald) confidence interval for an estimate
     with known variance, e.g. a coefficient from fit_calibration_slope_intercept.
