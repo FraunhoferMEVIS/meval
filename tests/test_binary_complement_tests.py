@@ -38,7 +38,7 @@ def setup():
 
 def test_find_binary_complements():
 
-    df, metrics, group_by, analysis_group_filters = setup()
+    df, _metrics, group_by, analysis_group_filters = setup()
 
     test_groups, test_group_complements = find_binary_complements(df, group_by=group_by,
                                                                   analysis_group_filters=analysis_group_filters)

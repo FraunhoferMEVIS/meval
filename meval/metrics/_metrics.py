@@ -47,13 +47,13 @@ def _ratio(numerator, denominator):
 
 def accuracy(target: LabelArray, preds: LabelArray | FloatArray, threshold: float | None = None) -> float:
     N = len(preds)
-    TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
+    TP, _FP, TN, _FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP + TN, N)
 
 
 def recall(target: LabelArray, preds: LabelArray | FloatArray, threshold: float | None = None) -> float:
-    TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
+    TP, _FP, _TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP, TP + FN)
 
@@ -61,7 +61,7 @@ sensitivity = recall
 TPR = recall
 
 def precision(target: LabelArray, preds: LabelArray | FloatArray, threshold: float | None = None) -> float:
-    TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
+    TP, FP, _TN, _FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP, TP + FP)
 
@@ -69,13 +69,13 @@ PPV = precision
 
 def f1_score(target: LabelArray, preds: LabelArray | FloatArray, threshold: float | None = None) -> float:
     # harmonic mean of precision and recall
-    TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
+    TP, FP, _TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP, TP + 0.5 * (FP+FN))
 
 
 def specificity(target: LabelArray, preds: LabelArray | FloatArray, threshold: float | None = None) -> float:
-    TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
+    _TP, FP, TN, _FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TN, TN + FP)
 
@@ -88,7 +88,7 @@ def FPR(target: LabelArray, preds: LabelArray | FloatArray, threshold: float | N
 
 def selection_rate(target: LabelArray, preds: LabelArray | FloatArray, threshold: float | None = None):
     N = len(preds)
-    TP, FP, TN, FN = get_confusion_matrix(target, preds, threshold=threshold)
+    TP, FP, _TN, _FN = get_confusion_matrix(target, preds, threshold=threshold)
 
     return _ratio(TP + FP, N)
 

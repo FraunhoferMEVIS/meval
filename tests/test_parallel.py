@@ -18,7 +18,7 @@ def test_error_propagation():
     test_df.loc[:, "site"] = 6*["A"] + 6*["B"]
 
     with pytest.raises(AssertionError) as exc_info:
-        all_metric_results_df, plot_groups = compare_groups(
+        _all_metric_results_df, _plot_groups = compare_groups(
             df=test_df,
             metrics=[MultiClassAUROC()],
             group_by="site",

@@ -33,7 +33,7 @@ class BrierScore(ComparisonMetric):
         y_true = np.asarray(self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True), dtype=bool)
         y_pred_prob = np.asarray(self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True), dtype=float)
 
-        brier_score, brier_score_pos, brier_score_neg, brier_score_bal = brier_scores(y_true, y_pred_prob)
+        brier_score, _brier_score_pos, _brier_score_neg, brier_score_bal = brier_scores(y_true, y_pred_prob)
         if self.balanced:
             return brier_score_bal
         else:

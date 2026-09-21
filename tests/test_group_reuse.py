@@ -31,7 +31,7 @@ def test_integration():
     )
 
     # reuse groups from above both for analysis and plotting
-    all_metric_results_df, plot_groups = compare_groups(
+    _all_metric_results_df, plot_groups = compare_groups(
         df=test_df,
         metrics=[BrierScore()],
         analysis_groups=plot_groups,

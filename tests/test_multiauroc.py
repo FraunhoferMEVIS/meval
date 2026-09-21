@@ -24,7 +24,7 @@ def test_multiauroc():
     test_df = pd.concat([test_df, test_df], ignore_index=True)
     test_df.loc[:, "site"] = 6*["A"] + 6*["B"]
 
-    all_metric_results_df, plot_groups = compare_groups(
+    all_metric_results_df, _plot_groups = compare_groups(
         df=test_df,
         metrics=[MultiClassAUROC()],
         group_by="site",

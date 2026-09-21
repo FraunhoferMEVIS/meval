@@ -46,7 +46,7 @@ def test_multitest():
         min_subgroup_size=1
     )
 
-    all_metric_results_df2, plot_groups = compare_groups(
+    all_metric_results_df2, _plot_groups = compare_groups(
         df=test_df,
         metrics=[Accuracy(test=True)],
         group_by=["group1", "group2"],
@@ -76,7 +76,7 @@ def test_fdr_bh():
         test_correction_method="holm"
     )
 
-    all_metric_results_df2, plot_groups = compare_groups(
+    all_metric_results_df2, _plot_groups = compare_groups(
         df=test_df,
         metrics=[Accuracy(test=True)],
         group_by=["group1", "group2"],
