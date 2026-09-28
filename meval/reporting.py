@@ -23,13 +23,16 @@ def generate_report_file(
         all_metric_results_df: pd.DataFrame, 
         plot_groups: Sequence[str],
         metrics: Sequence[ComparisonMetric],
-        threshold: float | None = None
+        threshold: float | None = None,
+        include_supporting_curves: bool = True,
+        include_risk_plot: bool = True
         ) -> None:
 
     report_file_path = fspath(report_file_path)
 
     metric_overview_fig = plot_metric_overview(metrics, all_metric_results_df, plot_groups, test_df=df,
-                                               add_risk_plot=any([colname in df.columns for colname in ComparisonMetric.y_pred_prob_cols]),
+                                               add_risk_plot=include_risk_plot and any([colname in df.columns for colname in ComparisonMetric.y_pred_prob_cols]),
+                                               include_supporting_curves=include_supporting_curves,
                                                threshold=threshold)
     metric_overview_html = plot_to_html(metric_overview_fig)
 

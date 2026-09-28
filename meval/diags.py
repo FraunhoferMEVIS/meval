@@ -8,11 +8,11 @@ import kaleido
 import numpy as np
 import pandas as pd
 import plotly.colors as pc
-import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.basedatatypes import BaseTraceType
 from plotly.subplots import make_subplots
+from scipy.stats import gaussian_kde
 
 from ._array_types import BoolArray, FloatArray
 from .config import settings
@@ -58,6 +58,17 @@ default_layout_no_title = default_layout | {
 
 default_layout_with_title = default_layout | {
     "margin": {"l": 0, "r": 0, "t": 40, "b": 0},
+}
+
+# Layout of a reliability diagram with a risk density panel below it. rel_diag
+# used to inherit this from plotly's ff.create_distplot (removed in plotly 7)
+# via fig.update_layout(dist_fig.layout); it is kept verbatim (minus the no-op
+# barmode/hovermode entries) so that the rendered figure does not change.
+risk_density_panel_layout = {
+    "legend": {"traceorder": "reversed"},
+    "xaxis": {"domain": [0.0, 1.0], "anchor": "y2", "zeroline": False},
+    "yaxis": {"domain": [0.35, 1], "anchor": "free", "position": 0.0},
+    "yaxis2": {"domain": [0, 0.25], "anchor": "x", "dtick": 1, "showticklabels": False},
 }
 
 
@@ -168,7 +179,8 @@ def metric_plot(
     export_fig_path: FilePath | None = None, 
         export_fig_size_cm: tuple[float | int, float | int] | None = None,
         export_fig_size_in: tuple[float | int, float | int] | None = None,
-        return_group_color_dict: bool = False
+        return_group_color_dict: bool = False,
+        significance_text_pad_scale: float = 0.15
         ) -> go.Figure | list[BaseTraceType] | tuple[go.Figure | list[BaseTraceType], dict]:
 
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
@@ -264,7 +276,7 @@ def metric_plot(
 
         plot_max_y = metric_results_df[metric.metric_name_high].max()
         plot_min_y = metric_results_df[metric.metric_name_low].min()
-        text_pad_y = (plot_max_y - plot_min_y) * 0.15       
+        text_pad_y = (plot_max_y - plot_min_y) * significance_text_pad_scale
 
         for idx, color in enumerate(colors):
 
@@ -318,7 +330,8 @@ def metric_plot(
         yaxis={
             "title": metric.metric_name,
             "automargin": True,
-        }
+        },
+        margin_r=group_label_right_margin_px(group_names)
     )
 
     if export_fig_path is not None:
@@ -388,15 +401,8 @@ def rel_diag(
         ))
         
         if add_risk_density:
-            hist_data = [y_pred_prob.dropna().tolist()]
-            colors = [rgb_color]
-            # Create the distribution plot
-            dist_fig = ff.create_distplot(hist_data, ['all'], show_hist=False, colors=colors).update_traces(showlegend=False)
-            for trace in dist_fig.data:
+            for trace in kde_traces([y_pred_prob.dropna()], ['all'], [rgb_color]):
                 fig.add_trace(trace, row=2, col=1)
-            fig.update_layout(dist_fig.layout)
-            fig.update_yaxes(title_text="Log Density" if log_density else "Density", row=2, col=1, type="log" if log_density else "linear")
-            #fig.update_xaxes(title_text="Predicted Probability", row=2, col=1)
 
     else:
         # Grouped reliability diagrams (same as before)
@@ -451,13 +457,12 @@ def rel_diag(
                 rgb_color = cmap[idx]
                 colors.append(rgb_color)
 
-            # Create the distribution plot
-            dist_fig = ff.create_distplot(hist_data, plot_groups, show_hist=False, colors=colors).update_traces(showlegend=False)
-            for trace in dist_fig.data:
+            for trace in kde_traces(hist_data, plot_groups, colors):
                 fig.add_trace(trace, row=2, col=1)
-            fig.update_layout(dist_fig.layout)
-            fig.update_yaxes(title_text="Log Density" if log_density else "Density", row=2, col=1, type="log" if log_density else "linear")
-            #fig.update_xaxes(title_text="Predicted Probability", row=2, col=1)
+
+    if add_risk_density:
+        fig.update_layout(risk_density_panel_layout)
+        fig.update_yaxes(title_text="Log Density" if log_density else "Density", row=2, col=1, type="log" if log_density else "linear")
 
     # Add ideal line to the first row
     traces.append(go.Scatter(
@@ -608,7 +613,8 @@ def curve_diag(
     return traces
 
 
-def add_thresh_marker(traces, x, y, color, thresh):
+def add_thresh_marker(traces, x, y, color, thresh, group_name: str = "all",
+                      axis_labels: tuple[str, str] = ("x", "y")):
     traces.append(go.Scatter(
         x=[x],
         y=[y],
@@ -616,7 +622,13 @@ def add_thresh_marker(traces, x, y, color, thresh):
         marker={"size": 10, "color": color, "symbol": 'circle-dot'},
         marker_line_width=1,
         marker_line_color="black",
-        name=f'Threshold {thresh:.2f}',
+        name=f'{group_name}, threshold {thresh:.2f}',
+        # Group names are regularly longer than the 15 characters that plotly truncates hover labels
+        # to by default, which would cut off the very name this label is there to show.
+        hoverlabel={"namelength": -1},
+        # Three significant digits rather than a fixed number of decimals: the operating points of
+        # interest often sit at very small false positive rates, which fixed decimals round to zero.
+        hovertemplate=f'{axis_labels[0]} %{{x:.3g}}, {axis_labels[1]} %{{y:.3g}}',
         showlegend=False
     ))
 
@@ -634,6 +646,9 @@ def roc_diag(
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
 
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
+
+    # Short forms of the axis titles, for the threshold marker's hover label.
+    hover_labels = ("FPR", "TPR")
 
     fig = go.Figure()
 
@@ -658,7 +673,8 @@ def roc_diag(
             fpr = FPR(target=y_true, preds=y_pred_prob, threshold=threshold)
             tpr = TPR(target=y_true, preds=y_pred_prob, threshold=threshold)
 
-            add_thresh_marker(traces, x=fpr, y=tpr, color=get_cmap(1)[0], thresh=threshold)
+            add_thresh_marker(traces, x=fpr, y=tpr, color=get_cmap(1)[0], thresh=threshold, group_name="all",
+                              axis_labels=hover_labels)
 
         else:
             if group_color_dict is None:
@@ -675,7 +691,8 @@ def roc_diag(
                     fpr = FPR(target=y_true, preds=y_pred_prob, threshold=threshold)
                     tpr = TPR(target=y_true, preds=y_pred_prob, threshold=threshold)
 
-                    add_thresh_marker(traces, x=fpr, y=tpr, color=cmap[idx], thresh=threshold)
+                    add_thresh_marker(traces, x=fpr, y=tpr, color=cmap[idx], thresh=threshold, group_name=group_name,
+                                      axis_labels=hover_labels)
 
     fig.add_traces(traces)
 
@@ -715,6 +732,9 @@ def pr_diag(
         ) -> tuple[go.Figure, list[BaseTraceType], dict]:
     
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
+
+    # Short forms of the axis titles, for the threshold marker's hover label.
+    hover_labels = ("Recall", "Precision")
 
     fig = go.Figure()
 
@@ -795,7 +815,8 @@ def pr_diag(
             prec = precision(target=y_true, preds=y_pred_prob, threshold=threshold)
             rec = recall(target=y_true, preds=y_pred_prob, threshold=threshold)
 
-            add_thresh_marker(traces, x=rec, y=prec, color=get_cmap(1)[0], thresh=threshold)
+            add_thresh_marker(traces, x=rec, y=prec, color=get_cmap(1)[0], thresh=threshold, group_name="all",
+                              axis_labels=hover_labels)
 
         else:
             if group_color_dict is None:
@@ -811,7 +832,8 @@ def pr_diag(
                 prec = precision(target=y_true, preds=y_pred_prob, threshold=threshold)
                 rec = recall(target=y_true, preds=y_pred_prob, threshold=threshold)
 
-                add_thresh_marker(traces, x=rec, y=prec, color=cmap[idx], thresh=threshold)
+                add_thresh_marker(traces, x=rec, y=prec, color=cmap[idx], thresh=threshold, group_name=group_name,
+                                  axis_labels=hover_labels)
 
     fig.add_traces(traces)
 
@@ -853,6 +875,9 @@ def prg_diag(
     
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
 
+    # Short forms of the axis titles, for the threshold marker's hover label.
+    hover_labels = ("Recall gain", "Precision gain")
+
     fig = go.Figure()
 
     traces = curve_diag(test_df, bootstrap_prg_curve, plot_groups=plot_groups, group_color_dict=group_color_dict)
@@ -874,7 +899,8 @@ def prg_diag(
             precg = precision_gain(target=y_true, preds=y_pred_prob, threshold=threshold)
             recg = recall_gain(target=y_true, preds=y_pred_prob, threshold=threshold)
 
-            add_thresh_marker(traces, x=recg, y=precg, color=get_cmap(1)[0], thresh=threshold)
+            add_thresh_marker(traces, x=recg, y=precg, color=get_cmap(1)[0], thresh=threshold, group_name="all",
+                              axis_labels=hover_labels)
 
         else:
             if group_color_dict is None:
@@ -891,7 +917,8 @@ def prg_diag(
                     precg = precision_gain(target=y_true, preds=y_pred_prob, threshold=threshold)
                     recg = recall_gain(target=y_true, preds=y_pred_prob, threshold=threshold)
 
-                    add_thresh_marker(traces, x=recg, y=precg, color=cmap[idx], thresh=threshold)
+                    add_thresh_marker(traces, x=recg, y=precg, color=cmap[idx], thresh=threshold, group_name=group_name,
+                                      axis_labels=hover_labels)
 
     fig.add_traces(traces)
 
@@ -945,9 +972,24 @@ def plot_metric_overview(
         export_fig_size_cm: tuple[float | int, float | int] | None = None, 
         export_fig_size_in: tuple[float | int, float | int] | None = None, 
         log_density: bool = True,
-        threshold: float | None = None
+        threshold: float | None = None,
+        include_supporting_curves: bool = True,
+        subplot_cols: int = 2,
+        shared_xaxes: bool = False,
+        significance_text_pad_scale: float = 0.15
         ) -> go.Figure:
-    
+    """Grid of per-group metric panels, plus (optionally) supporting curves, sample counts and a risk score density.
+
+    :param include_supporting_curves: Add one supporting-curve panel (ROC, reliability diagram, ...) per
+        curve_family among the requested curve-based metrics. Requires test_df.
+    :param subplot_cols: Number of grid columns.
+    :param shared_xaxes: Link the x axes of all group-indexed panels (metric values and sample counts) within
+        each grid column; only the bottom-most of them shows the group tick labels. Panels with a different
+        x axis (supporting curves, risk density) are never linked.
+    :param significance_text_pad_scale: Gap between a CI and its significance annotation, as a fraction of the
+        panel's y range.
+    """
+
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
 
     if threshold is not None:
@@ -973,29 +1015,22 @@ def plot_metric_overview(
     # supporting-curve subplot, so the family's plot renders exactly once no
     # matter how many of its members are requested together.
     curve_metric_ids_with_plot: set[int] = set()
-    seen_curve_families: set[str] = set()
-    for metric in metrics:
-        if isinstance(metric, CurveBasedComparisonMetric) and metric.curve_family not in seen_curve_families:
-            seen_curve_families.add(metric.curve_family)
-            curve_metric_ids_with_plot.add(id(metric))
+    if include_supporting_curves and test_df is not None:
+        seen_curve_families: set[str] = set()
+        for metric in metrics:
+            if isinstance(metric, CurveBasedComparisonMetric) and metric.curve_family not in seen_curve_families:
+                seen_curve_families.add(metric.curve_family)
+                curve_metric_ids_with_plot.add(id(metric))
 
-    if test_df is None:
-        num_subplots = len(metrics)
-    else:
-        num_subplots = len(metrics) + len(curve_metric_ids_with_plot)
+    num_subplots = len(metrics) + len(curve_metric_ids_with_plot)
 
     if add_risk_plot:
         assert test_df is not None
         num_subplots = num_subplots + 1
 
-    rows = math.ceil(num_subplots / 2)
-    cols = 2
+    cols = subplot_cols
+    rows = math.ceil(num_subplots / cols)
     fig = make_subplots(rows=rows, cols=cols)
-
-    if math.ceil(num_subplots / 2) * 2 > num_subplots:
-        remove_last_axis = True
-    else:
-        remove_last_axis = False
 
     cmap = get_cmap(len(plot_groups))
 
@@ -1004,6 +1039,7 @@ def plot_metric_overview(
 
     plot_idx = 0
     metric_subplot_positions: list[tuple[int, int]] = []
+    count_subplot_position: tuple[int, int] | None = None
     
     for metric in plot_metrics:
         row = (plot_idx // cols) + 1
@@ -1017,7 +1053,8 @@ def plot_metric_overview(
             cmap=cmap, 
             fig_title='', 
             sort_groups_by_metric=False,
-            figure=False
+            figure=False,
+            significance_text_pad_scale=significance_text_pad_scale
         )
 
         for trace in traces:
@@ -1056,30 +1093,16 @@ def plot_metric_overview(
 
                 plot_idx += 1
 
-    if metric_subplot_positions:
-        last_metric_row = max(row for row, _ in metric_subplot_positions)
-        for row, col in metric_subplot_positions:
-            if row < last_metric_row:
-                fig.update_xaxes(showticklabels=False, row=row, col=col)
-            else:
-                fig.update_xaxes(
-                    showticklabels=True,
-                    tickangle=45,
-                    tickmode="array",
-                    tickvals=list(range(len(plot_groups))),
-                    ticktext=list(plot_groups),
-                    automargin=True,
-                    row=row,
-                    col=col,
-                )
-
     if 'Count' in metric_results_df:
         row = (plot_idx // cols) + 1
         col = (plot_idx % cols) + 1
+        count_subplot_position = (row, col)
 
         trace = go.Bar(
-            x=metric_results_df.index.tolist(),  # Group names
+            x=list(range(len(plot_groups))),  # Same group positions as in the metric panels
             y=metric_results_df.loc[plot_groups, "Count"], 
+            hovertext=list(plot_groups),
+            hoverinfo="text+y",
             marker={"color": [cmap[idx] for idx in range(len(plot_groups))]},
             width=0.8,
             showlegend=False
@@ -1095,18 +1118,39 @@ def plot_metric_overview(
             col=col,
         )
 
-        fig.update_xaxes(
-            title_text="",
-            tickangle=45,
-            tickmode="array",
-            tickvals=list(range(len(plot_groups))),
-            ticktext=plot_groups,
-            row=row,
-            col=col, 
-            automargin=True
-        )
+        fig.update_xaxes(title_text="", row=row, col=col)
 
         plot_idx += 1
+
+    # All group-indexed panels (metric values, sample counts) use the same x
+    # positions, one per group, and are labeled identically. The labels are rotated and therefore
+    # need the space below the panel, which only the bottom grid row has.
+    group_subplot_positions = metric_subplot_positions + ([count_subplot_position] if count_subplot_position else [])
+    group_label_positions = [(row, col) for row, col in group_subplot_positions if row == rows]
+    group_tick_kwargs = {
+        "tickmode": "array",
+        "tickvals": list(range(len(plot_groups))),
+        "ticktext": list(plot_groups),
+        "tickangle": 45,
+        "automargin": True,
+    }
+
+    if shared_xaxes:
+        # Link each grid column's group panels to its bottom-most one, which carries the group labels
+        # if it is in the bottom grid row.
+        for col in {col for _, col in group_subplot_positions}:
+            *upper_rows, bottom_row = sorted(row for row, c in group_subplot_positions if c == col)
+            bottom_xaxis_id = fig.get_subplot(bottom_row, col).xaxis.plotly_name.replace("axis", "")
+            for row in upper_rows:
+                fig.update_xaxes(**group_tick_kwargs, showticklabels=False, matches=bottom_xaxis_id, row=row, col=col)
+            fig.update_xaxes(**group_tick_kwargs, showticklabels=(bottom_row, col) in group_label_positions,
+                             row=bottom_row, col=col)
+    else:
+        for row, col in group_subplot_positions:
+            if (row, col) in group_label_positions:
+                fig.update_xaxes(**group_tick_kwargs, showticklabels=True, row=row, col=col)
+            else:
+                fig.update_xaxes(showticklabels=False, row=row, col=col)
 
     if add_risk_plot:
         assert test_df is not None and any([colname in test_df.columns for colname in ComparisonMetric.y_pred_prob_cols])
@@ -1131,10 +1175,7 @@ def plot_metric_overview(
         for i in range(len(data_df['group'].unique())):
             colors.append(cmap[i])
 
-        # Create the distribution plot
-        dist_fig = ff.create_distplot(hist_data, group_labels, show_hist=False, colors=colors)
-        dist_traces = dist_fig.data
-        for trace in dist_traces:
+        for trace in kde_traces(hist_data, group_labels, colors):
             fig.add_trace(trace, row=row, col=col)
         
         fig.update_xaxes(title_text='$\\text{Risk Score } R$', range=[0, 1], row=row, col=col)
@@ -1151,19 +1192,22 @@ def plot_metric_overview(
 
         plot_idx += 1
 
-    if remove_last_axis:
-        last_row = (plot_idx // cols) + 1
-        last_col = (plot_idx % cols) + 1
+    # Hide the axes of the unused grid cells at the end
+    for idx in range(plot_idx, rows * cols):
+        fig.update_xaxes(visible=False, row=(idx // cols) + 1, col=(idx % cols) + 1)
+        fig.update_yaxes(visible=False, row=(idx // cols) + 1, col=(idx % cols) + 1)
 
-        fig.update_xaxes(visible=False, row=last_row, col=last_col )
-        fig.update_yaxes(visible=False, row=last_row, col=last_col )
+    # Group labels are rotated: only those in the last grid column can stick out past the figure.
+    right_margin_px = group_label_right_margin_px(
+        plot_groups, tickangle=group_tick_kwargs["tickangle"],
+        fig_width_px=cols * 450) if any(col == cols for _, col in group_label_positions) else 0
 
     fig.update_layout(
         showlegend=False, 
         barmode='group',
         height=rows * 250,
         width=cols * 450,
-        margin={"l": 0, "r": 0, "t": 0, "b": 0},
+        margin={"l": 0, "r": right_margin_px, "t": 0, "b": 0},
         template="plotly_white"
     )
 
@@ -1171,6 +1215,71 @@ def plot_metric_overview(
         process_export_file(fig, export_fig_path, export_fig_size_in=export_fig_size_in, export_fig_size_cm=export_fig_size_cm)
     
     return fig
+
+
+def kde_traces(
+        samples_per_group: Sequence[Sequence[float]],
+        group_names: Sequence[str],
+        colors: Sequence[str],
+        num_points: int = 500
+        ) -> list[go.Scatter]:
+    """One Gaussian KDE curve (Scott's rule bandwidth) per group.
+
+    Each curve is evaluated on num_points equispaced points over [min, max) of
+    that group's samples. This reproduces the curves that plotly's
+    ff.create_distplot(..., show_hist=False) drew before it was removed in
+    plotly 7. Its rug traces are deliberately not reproduced: their y values
+    are group names, which never rendered on meval's explicitly log- or
+    linear-typed density axes, and they embedded every sample in the figure.
+    Groups with fewer than two distinct samples, whose KDE is undefined, are
+    skipped.
+    """
+    traces = []
+    for samples, group_name, color in zip(samples_per_group, group_names, colors):
+        samples = np.asarray(samples, dtype=float)
+        if np.unique(samples).size < 2:
+            continue
+        xvals = np.linspace(samples.min(), samples.max(), num_points, endpoint=False)
+        traces.append(go.Scatter(
+            x=xvals,
+            y=gaussian_kde(samples)(xvals),
+            mode='lines',
+            name=group_name,
+            legendgroup=group_name,
+            line={"color": color},
+            showlegend=False
+        ))
+    return traces
+
+
+def group_label_right_margin_px(
+        group_names: Sequence[str],
+        tickangle: float | None = None,
+        font_size: float = 12,
+        char_width_em: float = 0.6,
+        fig_width_px: int | None = None
+        ) -> int:
+    """Right margin needed so that the rightmost rotated group label is still drawn.
+
+    Plotly drops tick labels that stick out past the figure (``ticklabeloverflow`` defaults to
+    "hide past div") and ``automargin`` only reserves vertical space for them, so the label of the
+    last group needs explicit room on the right. The estimate is the label's width projected onto
+    the x axis. For labels broken into several lines ("<br>") only the longest line counts, since
+    the remaining lines are offset perpendicular to the text direction and therefore do not reach
+    further right. ``char_width_em`` is an average character width with some headroom for wider
+    fonts (measured ~0.45 em for plotly's default font). ``tickangle`` None means that plotly picks
+    the angle itself, in which case the widest of its candidates (30 degrees, see
+    ``layout.xaxis.autotickangles``) is assumed. If ``fig_width_px`` is known, the margin is capped at
+    a third of it so that a pathologically long label cannot squeeze the plot away.
+    """
+    if len(group_names) == 0:
+        return 0
+
+    longest_line = max(len(line) for line in str(group_names[-1]).split("<br>"))
+    margin_px = math.ceil(math.cos(math.radians(30 if tickangle is None else tickangle))
+                          * char_width_em * font_size * longest_line)
+
+    return min(margin_px, fig_width_px // 3) if fig_width_px is not None else margin_px
 
 
 def get_cmap(num_groups: int) -> list[str]:
