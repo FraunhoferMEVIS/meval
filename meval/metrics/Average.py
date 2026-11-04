@@ -6,16 +6,28 @@ from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike, Met
 
 
 class Average(MetricWithAnalyticalVar):
+    """
+    Mean of an arbitrary column within a group.
 
-    def __init__(self, metric_col, test: bool = False, direction: str = "N/A"):
+    With y_class set (binary labels), the mean is taken only over the group's cases with
+    y_true == y_class. Average("y_pred_prob", y_class=0) is then the mean predicted probability
+    among the group's negatives and y_class=1 among its positives. These are the intercept and
+    intercept + slope of an OLS regression of the score on the label within the group; equal
+    values across groups correspond to "balance for the negative / positive class"
+    (Kleinberg, Mullainathan & Raghavan, 2016).
+    """
+
+    def __init__(self, metric_col, test: bool = False, direction: str = "N/A", y_class: int | bool | None = None):
         # Average() wraps an arbitrary caller-provided column (e.g. a
         # per-sample margin, error, or custom score), so unlike most other
         # metrics it can't infer a sensible "maximize"/"minimize" direction
         # from its own definition - callers who know what metric_col means
         # can pass direction explicitly, e.g. Average("margin", direction="maximize").
+        req_cols = [metric_col] if y_class is None else [metric_col, ComparisonMetric.y_true_cols]
+        metric_name = f"Avg({metric_col})" if y_class is None else f"Avg({metric_col} | y={int(y_class)})"
         super().__init__(
-            req_cols=[metric_col],
-            metric_name="Avg(" + metric_col + ")",
+            req_cols=req_cols,
+            metric_name=metric_name,
             reference_class="self",
             needs_all_classes=False,
             is_descriptive=False,
@@ -23,6 +35,16 @@ class Average(MetricWithAnalyticalVar):
             test=test
         )
         self.metric_col = metric_col
+        self.y_class = y_class
+
+    def _restrict_to_class(self, df: pd.DataFrame, mask: MaskLike, validate: bool) -> MaskLike:
+        if self.y_class is None:
+            return mask
+        is_class = np.asarray(self.get_binary_y_true(df, validate=validate, return_array=True)) == bool(self.y_class)
+        mask_np = np.asarray(mask)
+        if np.issubdtype(mask_np.dtype, np.integer):  # row positions, possibly repeated (bootstrap)
+            return mask_np[is_class[mask_np]]
+        return mask_np.astype(bool) & is_class
 
     def __call__(
         self, 
@@ -33,7 +55,7 @@ class Average(MetricWithAnalyticalVar):
         return_var: bool = False
         ) -> float | tuple[float, float]:
         
-        mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
+        mask = self._restrict_to_class(df, self.get_group_mask(df, group_filter, group_mask, validate=validate), validate)
 
         vals = ComparisonMetric._masked_array(df[self.metric_col], mask)
         
@@ -64,7 +86,7 @@ class Average(MetricWithAnalyticalVar):
         return_val: bool | None = False
         ) -> float | tuple[float, float]:
         
-        mask = self.get_group_mask(df, group_filter, group_mask, validate=validate)
+        mask = self._restrict_to_class(df, self.get_group_mask(df, group_filter, group_mask, validate=validate), validate)
         vals = ComparisonMetric._masked_array(df[self.metric_col], mask)
 
         n_valid = np.isfinite(vals).sum()
