@@ -349,6 +349,17 @@ def metric_plot(
             return traces
 
 
+def _band_polygon(xvals: FloatArray, samples: FloatArray, axis: int) -> tuple[FloatArray, FloatArray]:
+    """(x, y) of a filled pointwise confidence band, restricted to where both bounds are defined.
+    Curves can be NaN outside the observed score range; leaving NaNs in a fill='toself' polygon
+    makes plotly connect its pieces with spurious straight edges."""
+    low = np.asarray(ci_nan_quantile(samples, (1 - settings.ci_alpha) / 2, axis=axis), dtype=float)
+    high = np.asarray(ci_nan_quantile(samples, 1 - (1 - settings.ci_alpha) / 2, axis=axis), dtype=float)
+    defined = np.isfinite(low) & np.isfinite(high)
+    x = np.asarray(xvals, dtype=float)[defined]
+    return np.concatenate([x, x[::-1]]), np.concatenate([low[defined], high[defined][::-1]])
+
+
 def rel_diag(
         test_df: pd.DataFrame, 
         plot_groups: Sequence[str] | None = None, 
@@ -389,10 +400,10 @@ def rel_diag(
                                  line={"color": rgb_color}, showlegend=True))
 
         # Add confidence interval
+        band_x, band_y = _band_polygon(xvals, calib_probs_samples, axis=1)
         traces.append(go.Scatter(
-            x=np.concatenate([xvals, xvals[::-1]]),
-            y=np.concatenate([ci_nan_quantile(calib_probs_samples, (1 - settings.ci_alpha) / 2, axis=1),
-                              ci_nan_quantile(calib_probs_samples, 1 - (1 - settings.ci_alpha) / 2, axis=1)[::-1]]),  # type: ignore
+            x=band_x,
+            y=band_y,
             fill='toself',
             fillcolor=rgb_color,
             line={"color": 'rgba(255,255,255,0)'},
@@ -436,10 +447,10 @@ def rel_diag(
                     ))
 
                     # Add confidence interval
+                    band_x, band_y = _band_polygon(xvals, calib_probs_samples, axis=1)
                     traces.append(go.Scatter(
-                        x=np.concatenate([xvals, xvals[::-1]]),
-                        y=np.concatenate([ci_nan_quantile(calib_probs_samples, (1 - settings.ci_alpha) / 2, axis=1),
-                                        ci_nan_quantile(calib_probs_samples, 1 - (1 - settings.ci_alpha) / 2, axis=1)[::-1]]), # type: ignore
+                        x=band_x,
+                        y=band_y,
                         fill='toself',
                         line={"color": 'rgba(255,255,255,0)'},
                         fillcolor=rgb_color,

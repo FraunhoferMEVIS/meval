@@ -17,6 +17,8 @@ class Settings:
         self.N_bootstrap = self._get_env_int("MEVAL_N_BOOTSTRAP", 200)
         self.ci_alpha = self._get_env_float("MEVAL_CI_ALPHA", 0.95)
         self.num_loess_calibration_samples = self._get_env_int("MEVAL_NUM_LOESS_CALIBRATION_SAMPLES", self.N_bootstrap)
+        # Fixed LOESS span for reliability curves; None = sample-size rule in metrics._calibration.loess_span
+        self.loess_frac = self._get_env_float("MEVAL_LOESS_FRAC", None)
         self.add_med_group = self._get_env_bool("MEVAL_ADD_MED_GROUP", False)
         self.ci_plot_alpha = self._get_env_float("MEVAL_CI_PLOT_ALPHA", 0.3)
         self.seed = self._get_env_int("MEVAL_SEED", 49)
@@ -86,7 +88,7 @@ class Settings:
         except ValueError:
             return default
     
-    def _get_env_float(self, name, default: float) -> float:
+    def _get_env_float(self, name, default: float | None) -> float | None:
         """Convert environment variable to float."""
         value = os.environ.get(name)
         if value is None:
@@ -106,6 +108,7 @@ class Settings:
             "N_bootstrap": (self._get_env_int, f"{prefix}N_BOOTSTRAP"),
             "ci_alpha": (self._get_env_float, f"{prefix}CI_ALPHA"),
             "num_loess_calibration_samples": (self._get_env_int, f"{prefix}NUM_LOESS_CALIBRATION_SAMPLES"),
+            "loess_frac": (self._get_env_float, f"{prefix}LOESS_FRAC"),
             "add_med_group": (self._get_env_bool, f"{prefix}ADD_MED_GROUP"),
             "ci_plot_alpha": (self._get_env_float, f"{prefix}CI_PLOT_ALPHA"),
             "seed": (self._get_env_int, f"{prefix}SEED"),

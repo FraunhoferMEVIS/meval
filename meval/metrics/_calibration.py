@@ -16,6 +16,7 @@ from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
 from statsmodels.tools.sm_exceptions import PerfectSeparationError
 
 from .._array_types import FloatArray, LabelArray
+from ..config import settings
 
 Data = list[tuple[float, float]]  # List of (predicted_probability, true_label).
 Bins = list[float]  # List of bin boundaries, excluding 0.0, but including 1.0.
@@ -482,7 +483,7 @@ def ece(target, pred_probs, method, ci_alpha=None, n_samples=100, num_bins=15):
         ece = np.mean(np.abs(pred_probs - probs))
         return ece
     elif method == 'loess':
-        probs, probs_samples = loess_calibration(target, pred_probs, n_samples=n_samples)
+        probs, probs_samples = loess_calibration(target, pred_probs, n_bootstrap_samples=n_samples)
         ece_arr = np.nanmean(np.abs(pred_probs[:, None] - probs_samples), axis=0)
         ece = np.mean(np.abs(pred_probs - probs))
         ci_lower, ci_upper = np.nanquantile(ece_arr, q=[ci_alpha, 1-ci_alpha])
@@ -491,30 +492,63 @@ def ece(target, pred_probs, method, ci_alpha=None, n_samples=100, num_bins=15):
         raise NotImplementedError
 
 
-def loess_calibration(target, pred_probs, n_bootstrap_samples=None, xvals=None):
+def loess_span(n: int) -> float:
+    """
+    LOESS span (fraction of the data used in each local fit) for a curve fitted on n samples.
 
+    The span has to shrink as n grows. With a fixed span, the smoother's bias never vanishes,
+    while the bootstrap band around it (which reflects variance only) keeps narrowing, so the
+    band excludes the true curve more and more often as n grows.
+
+    This rule shrinks the span as n^(-1/5), the rate of the asymptotically MSE-optimal
+    bandwidth of local linear regression (squared bias O(h^4), variance O(1/(nh)); Fan &
+    Gijbels 1996, Local Polynomial Modelling and Its Applications, Sec. 3.2.3, eq. 3.20, with
+    p = 1). For a nearest-neighbour span the local half-width is about frac / (2 f(x)), with f
+    the score density, so frac is proportional to h and shrinks at the same rate.
+
+    Only the rate is derived. The constant is a choice: it reproduces the previous span of 0.30
+    at n = 10,000, so typical evaluation set sizes behave as before. (The resulting 0.75 at
+    n = 100 is a coincidence of that choice. Austin & Steyerberg 2014 found R's default span of
+    0.75 to work well at n = 500 to 10,000, judged by curve variability rather than bias, with R's
+    loess(), whose default is a local quadratic fit; meval's lowess is local linear.)
+    A fixed span can be set with settings.loess_frac (env MEVAL_LOESS_FRAC).
+    """
+    if settings.loess_frac is not None:
+        return float(settings.loess_frac)
+    return float(min(1.0, 0.75 * (n / 100) ** (-1 / 5)))
+
+
+def loess_calibration(target, pred_probs, n_bootstrap_samples=None, xvals=None):
+    """
+    LOESS reliability curve P(target = 1 | pred_probs), optionally with bootstrap samples of it.
+
+    If xvals is given, the curve is evaluated there and is NaN at xvals outside the range of the
+    observed pred_probs (the smoother would otherwise extrapolate into regions without data).
+    Estimates are clipped to [0, 1].
+    """
     assert isinstance(target, pd.Series)
 
     # it: The number of residual-based reweightings to perform.
-    # frac: Between 0 and 1. The fraction of the data used when estimating each y-value.
     # delta: Distance within which to use linear-interpolation instead of weighted regression.
+    # it=0 as recommended for lowess calibration curves by Austin & Steyerberg (2014), Appendix A, following
+    # Harrell et al. https://doi.org/10.1002/sim.5941
     if xvals is None:
         delta = 0.005
+        outside = None
     else:
         delta = 0
+        pred_np = np.asarray(pred_probs, dtype=float)
+        outside = (np.asarray(xvals) < np.nanmin(pred_np)) | (np.asarray(xvals) > np.nanmax(pred_np))
 
-    # Austin and Steyerberg (2013) say frac=0.75 (="span" in their terminology) and it=0 are good for calibration
-    # analyses. https://onlinelibrary.wiley.com/doi/full/10.1002/sim.5941
-    # However, this frac=0.75 smoothes very strongly and is basically incapable of returning "sharp" calibration curves.
-    # Hence, let me try to choose an appropriate value for frac based on the sample size.
-    # (frac: fraction of samples that is taken into account for regressing at a given x value, inversely weighted by
-    # distance.)
-    # I want the number of datapoint taken into account to alway be ~250.
-    frac = max(0.3, min(1.0, 250/len(target)))
-    calib_probs = sm_lowess(target, pred_probs, frac=frac, it=0, return_sorted=False, delta=delta, xvals=xvals)
+    frac = loess_span(len(target))
 
-    #plt.figure()
-    #plt.scatter(pred_probs, calib_probs)
+    def fit(y, p):
+        curve = np.clip(sm_lowess(y, p, frac=frac, it=0, return_sorted=False, delta=delta, xvals=xvals), 0.0, 1.0)
+        if outside is not None:
+            curve[outside] = np.nan
+        return curve
+
+    calib_probs = fit(target, pred_probs)
 
     if n_bootstrap_samples is not None:
         # Reference for bootstrapping CIs for loess-based calibration:
@@ -528,11 +562,7 @@ def loess_calibration(target, pred_probs, n_bootstrap_samples=None, xvals=None):
 
         for idx in range(n_bootstrap_samples):
             bs_idces = np.random.choice(target.index, N_predictions)
-            target_bs = target[bs_idces]
-            pred_probs_bs = pred_probs[bs_idces]
-            calib_probs_samples[:, idx] = sm_lowess(target_bs, pred_probs_bs, frac=frac, it=0,
-                                                    xvals=xvals, return_sorted=False, delta=delta)
-            #plt.plot(xvals, calib_probs_samples[:, idx])
+            calib_probs_samples[:, idx] = fit(target[bs_idces], pred_probs[bs_idces])
         return calib_probs, calib_probs_samples
     else:
         return calib_probs
