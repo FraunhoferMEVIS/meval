@@ -52,7 +52,9 @@ def _multiclass_df() -> pd.DataFrame:
     y_true = rng.choice(3, size=N, p=[0.6, 0.25, 0.15])
     logits = rng.normal(size=(N, 3)) + 1.5 * np.eye(3)[y_true]
     probs = np.exp(logits) / np.exp(logits).sum(axis=1, keepdims=True)
-    return pd.DataFrame({"y_true": y_true, **{f"y_pred_prob_{k}": probs[:, k] for k in range(3)}})
+    return pd.DataFrame(
+        {"y_true": y_true, "score": rng.normal(size=N), **{f"y_pred_prob_{k}": probs[:, k] for k in range(3)}}
+    )
 
 
 def _regression_df() -> pd.DataFrame:
@@ -89,6 +91,9 @@ DECOMPOSABLE = [
     (_binary_df, BrierScore()),
     (_binary_df, BrierScore(balanced=False)),
     (_binary_df, Average("score")),
+    (_binary_df, Average("score", y_class=0)),
+    (_binary_df, Average("score", y_class=True)),
+    (_multiclass_df, Average("score", y_class=2)),
     (lambda: _binary_df(with_hard_pred=False), Recall(threshold=0.4)),
     (lambda: _binary_df(with_hard_pred=False), Specificity(threshold=0.4)),
     (_multiclass_df, Recall(per_class=True)),
