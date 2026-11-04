@@ -10,7 +10,16 @@ T = TypeVar("T")
 # consumed within a single compare_groups() call; under multiprocessing each
 # worker process has its own fresh import of this module and therefore its own
 # empty cache, so there is no cross-run staleness to worry about.
-_cache: dict[tuple[int, str, str], object] = {}
+#
+# Each entry also holds a reference to the dataframe it was computed on. CPython
+# reuses the id() of garbage-collected objects, so without that reference a new
+# dataframe could get the id of a dead one and silently receive its cached value
+# (this happens when metrics are called directly on a sequence of freshly built
+# dataframes, outside compare_groups). Holding the reference keeps the id from
+# being reused while the entry exists, and the identity check in _get_or_compute
+# makes that guarantee explicit. Memory is released by
+# clear_shared_computation_cache(), which compare_groups() calls on every run.
+_cache: dict[tuple[int, str, str], tuple[pd.DataFrame, object]] = {}
 
 # Sentinel group_name used by dataset_computation for values that are properties
 # of the whole dataframe rather than of any group. Not a valid GroupFilter
@@ -61,12 +70,7 @@ def shared_computation(
     if group_filter is None:
         return compute_fn()
 
-    key = (id(df), cache_key, group_filter.group_name)
-
-    if key not in _cache:
-        _cache[key] = compute_fn()
-
-    return _cache[key]  # type: ignore[return-value]
+    return _get_or_compute((id(df), cache_key, group_filter.group_name), df, compute_fn)
 
 
 def dataset_computation(
@@ -92,12 +96,15 @@ def dataset_computation(
     :param compute_fn: zero-argument callable; only invoked on a cache miss.
     :return: the cached or freshly computed value.
     """
-    key = (id(df), cache_key, _DATASET_SCOPE)
+    return _get_or_compute((id(df), cache_key, _DATASET_SCOPE), df, compute_fn)
 
-    if key not in _cache:
-        _cache[key] = compute_fn()
 
-    return _cache[key]  # type: ignore[return-value]
+def _get_or_compute(key: tuple[int, str, str], df: pd.DataFrame, compute_fn: Callable[[], T]) -> T:
+    entry = _cache.get(key)
+    if entry is None or entry[0] is not df:
+        entry = (df, compute_fn())
+        _cache[key] = entry
+    return entry[1]  # type: ignore[return-value]
 
 
 def clear_shared_computation_cache() -> None:
