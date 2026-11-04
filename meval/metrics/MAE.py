@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ..group_filter import GroupFilter
-from .ComparisonMetric import ComparisonMetric, MaskLike, MetricWithAnalyticalVar
+from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike, MetricWithAnalyticalVar
 
 
 class MAE(MetricWithAnalyticalVar):
@@ -81,6 +81,13 @@ class MAE(MetricWithAnalyticalVar):
             return mae, var
         else:
             return mae
+
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        mask = self.get_group_mask(df, validate=validate)
+        y_true_np = self.get_float_y_true(df, mask=mask, validate=validate, return_array=True)
+        y_pred_np = self.get_float_y_pred(df, mask=mask, validate=validate, return_array=True)
+        errs = np.abs(np.asarray(y_true_np, dtype=float) - np.asarray(y_pred_np, dtype=float))
+        return [DecompositionTerm(1.0, errs, np.isfinite(errs))]
 
     def get_variance(
         self, 

@@ -3,7 +3,7 @@ import pandas as pd
 
 from ..group_filter import GroupFilter
 from ._metrics import brier_scores
-from .ComparisonMetric import ComparisonMetric, MaskLike
+from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike
 
 
 class BrierScore(ComparisonMetric):
@@ -39,6 +39,15 @@ class BrierScore(ComparisonMetric):
         else:
             return brier_score
 
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        mask = self.get_group_mask(df, validate=validate)
+        y_true = np.asarray(self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True), dtype=bool)
+        y_pred_prob = np.asarray(self.get_binary_y_pred_prob(df, mask=mask, validate=validate, return_array=True), dtype=float)
+        squared_error = np.square(y_true - y_pred_prob)
+        if self.balanced:
+            # 0.5 * Brier score of the positives + 0.5 * Brier score of the negatives
+            return [DecompositionTerm(0.5, squared_error, y_true), DecompositionTerm(0.5, squared_error, ~y_true)]
+        return [DecompositionTerm(1.0, squared_error, np.ones(len(y_true), dtype=bool))]
 
 
 

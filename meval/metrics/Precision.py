@@ -1,9 +1,10 @@
 
+import numpy as np
 import pandas as pd
 
 from ..group_filter import GroupFilter
 from ._metrics import precision
-from .ComparisonMetric import ComparisonMetric, MaskLike, ThresholdedComparisonMetric
+from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike, ThresholdedComparisonMetric
 
 
 class Precision(ThresholdedComparisonMetric):
@@ -35,6 +36,12 @@ class Precision(ThresholdedComparisonMetric):
 
         return precision(y_true, y_pred)
 
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        # TP / (TP + FP): the share of predicted positives that are positive.
+        mask = self.get_group_mask(df, validate=validate)
+        y_true = np.asarray(self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True), dtype=bool)
+        y_pred = np.asarray(self.get_binary_y_pred(df, mask=mask, validate=validate, return_array=True), dtype=bool)
+        return [DecompositionTerm(1.0, y_true.astype(float), y_pred)]
 
 
 

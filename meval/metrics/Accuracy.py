@@ -6,6 +6,7 @@ from ..stats.confidence_intervals import proportion_confint, variance_of_proport
 from ._metrics import accuracy
 from .ComparisonMetric import (
     ComparisonMetric,
+    DecompositionTerm,
     MaskLike,
     MetricWithAnalyticalCI,
     MetricWithAnalyticalVar,
@@ -115,4 +116,10 @@ class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithA
         if return_val:
             return accuracy(y_true_np, y_pred_np), ci
         else:
-            return ci 
+            return ci
+
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        mask = self.get_group_mask(df, validate=validate)
+        y_true = np.asarray(self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True), dtype=bool)
+        y_pred = np.asarray(self.get_binary_y_pred(df, mask=mask, validate=validate, return_array=True), dtype=bool)
+        return [DecompositionTerm(1.0, (y_true == y_pred).astype(float), np.ones(len(y_true), dtype=bool))]

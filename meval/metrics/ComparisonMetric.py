@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
@@ -7,8 +8,21 @@ import pandera.pandas as pa
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseTraceType
 
-from .._array_types import MaskLike
+from .._array_types import BoolArray, FloatArray, MaskLike
 from ..group_filter import GroupFilter
+
+
+@dataclass(frozen=True)
+class DecompositionTerm:
+    """One term of a metric decomposition (see ComparisonMetric.decompose):
+    weight * mean(score[group & reference]).
+
+    score and reference have one entry per row of the dataframe the metric
+    was decomposed on; score is finite wherever reference is True.
+    """
+    weight: float
+    score: FloatArray
+    reference: BoolArray
 
 
 class ComparisonMetric(ABC):
@@ -73,6 +87,28 @@ class ComparisonMetric(ABC):
         # expand into multiple scalar outputs (for example one per class) can
         # override this method.
         return [self]
+
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        """The metric as a weighted sum of conditional means of per-sample scores.
+
+        Returns terms such that, for every group mask G over the rows of df,
+
+            self(df, group_mask=G) == sum(t.weight * mean(t.score[G & t.reference]) for t in terms)
+
+        whenever every G & t.reference is non-empty (the metric is NaN otherwise).
+        E.g. recall is mean(y_pred) over the positives, specificity mean(~y_pred)
+        over the negatives, the balanced Brier score 0.5 * mean((y - p)^2) over
+        the positives plus the same over the negatives.
+
+        A metric of this form can be estimated locally with exactly the same
+        definition as the group-wise metric, e.g. as a smooth function of a
+        continuous covariate by smoothing each term's score over its reference
+        rows. Returns None for metrics that cannot be written this way:
+        pairwise statistics (AUROC), model fits (calibration slope/intercept),
+        binning-based estimates (DRMSCE), counts. Metrics that expand via
+        resolve_metrics() (per_class=True) are decomposed per resolved metric.
+        """
+        return None
 
     def check_suspicious_usage(self, df: pd.DataFrame) -> None:
         return None

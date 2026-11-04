@@ -4,7 +4,7 @@ import pandas as pd
 
 from ..group_filter import GroupFilter
 from ._metrics import recall
-from .ComparisonMetric import ComparisonMetric, MaskLike, ThresholdedComparisonMetric
+from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike, ThresholdedComparisonMetric
 
 
 class Recall(ThresholdedComparisonMetric):
@@ -60,6 +60,15 @@ class Recall(ThresholdedComparisonMetric):
 
         return recall(y_true, y_pred)
 
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        if self.per_class:
+            return None  # expanded into one _PerClassRecall per class by resolve_metrics()
+        # TP / (TP + FN): the share of positives that are predicted positive.
+        mask = self.get_group_mask(df, validate=validate)
+        y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
+        y_pred = self.get_binary_y_pred(df, mask=mask, validate=validate, return_array=True)
+        return [DecompositionTerm(1.0, np.asarray(y_pred, dtype=float), np.asarray(y_true, dtype=bool))]
+
 
 class _PerClassRecall(ComparisonMetric):
 
@@ -94,6 +103,15 @@ class _PerClassRecall(ComparisonMetric):
 
         return recall(y_true_bin, y_pred_bin)
 
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        mask = self.get_group_mask(df, validate=validate)
+        y_true_mc = self.get_multiclass_y_true(df, mask=mask, validate=validate, return_array=True)
+        pred_class = self.get_multiclass_y_pred(df, mask=mask, validate=validate, return_array=True)
+        return [DecompositionTerm(
+            1.0,
+            (np.asarray(pred_class) == self.class_id).astype(float),
+            np.asarray(y_true_mc) == self.class_id,
+        )]
 
 
 

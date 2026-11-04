@@ -5,6 +5,7 @@ from .Average import Average
 from .BrierScore import BrierScore
 from .CalibrationIntercept import CalibrationIntercept
 from .CalibrationSlope import CalibrationSlope
+from .ComparisonMetric import DecompositionTerm
 from .Count import Count
 from .DRMSCE import DRMSCE
 from .MAE import MAE
@@ -24,6 +25,7 @@ __all__ = [
     "CalibrationIntercept",
     "CalibrationSlope",
     "Count",
+    "DecompositionTerm",
     "DRMSCE",
     "MAE",
     "MultiClassAUROC",

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from ..group_filter import GroupFilter
-from .ComparisonMetric import ComparisonMetric, MaskLike, MetricWithAnalyticalVar
+from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike, MetricWithAnalyticalVar
 
 
 class Average(MetricWithAnalyticalVar):
@@ -45,6 +45,11 @@ class Average(MetricWithAnalyticalVar):
             var = np.nan if n_valid <= 1 else float(np.nanvar(vals, ddof=1) / n_valid)
         
         return (avg, var) if return_var else avg
+
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        mask = self.get_group_mask(df, validate=validate)
+        vals = np.asarray(ComparisonMetric._masked_array(df[self.metric_col], mask), dtype=float)
+        return [DecompositionTerm(1.0, vals, np.isfinite(vals))]
 
 
     def get_variance(

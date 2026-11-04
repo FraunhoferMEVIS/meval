@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from ..group_filter import GroupFilter
-from .ComparisonMetric import ComparisonMetric, MaskLike
+from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike
 
 
 class ProportionOfPos(ComparisonMetric):
@@ -55,6 +55,13 @@ class ProportionOfPos(ComparisonMetric):
         y_true = self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True)
         return float(y_true.mean())
 
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        if self.per_class:
+            return None  # expanded into one _PerClassProportionOfPos per class by resolve_metrics()
+        mask = self.get_group_mask(df, validate=validate)
+        y_true = np.asarray(self.get_binary_y_true(df, mask=mask, validate=validate, return_array=True), dtype=bool)
+        return [DecompositionTerm(1.0, y_true.astype(float), np.ones(len(y_true), dtype=bool))]
+
 
 class _PerClassProportionOfPos(ComparisonMetric):
 
@@ -82,6 +89,10 @@ class _PerClassProportionOfPos(ComparisonMetric):
         assert isinstance(y_true_mc, np.ndarray)
         return float((y_true_mc == self.class_id).mean())
 
+    def decompose(self, df: pd.DataFrame, validate: bool = True) -> list[DecompositionTerm] | None:
+        mask = self.get_group_mask(df, validate=validate)
+        y_true_mc = np.asarray(self.get_multiclass_y_true(df, mask=mask, validate=validate, return_array=True))
+        return [DecompositionTerm(1.0, (y_true_mc == self.class_id).astype(float), np.ones(len(y_true_mc), dtype=bool))]
 
 
 
