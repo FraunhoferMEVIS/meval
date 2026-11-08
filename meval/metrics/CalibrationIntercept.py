@@ -110,6 +110,13 @@ class CalibrationIntercept(CurveBasedComparisonMetric, MetricWithAnalyticalCI, M
             curve_family="reliability",
         )
 
+    @property
+    def description(self) -> str | None:
+        at = ("the dataset's mean predicted log-odds" if self.reference_score == "mean"
+              else f"a predicted risk of {float(self.reference_score):.2g}")
+        return (f"Systematic calibration bias for the group in log-odds, at {at}: above 0 = the model understates the "
+                "group's risk, below 0 = it overstates it.")
+
     def _get_reference_logit(self, df: pd.DataFrame, validate: bool) -> float:
         """
         The reference point L0 on the logit scale. For reference_score="mean"

@@ -29,6 +29,12 @@ class AUPRG(CurveBasedComparisonMetric):
         )
         self.rec_gain_min = rec_gain_min
 
+    @property
+    def description(self) -> str | None:
+        partial = "" if self.rec_gain_min == 0 else f", for recall gain of at least {self.rec_gain_min:g}"
+        return (f"Area under the precision-recall-gain curve within the group{partial} (Flach & Kull, 2015): "
+                "discrimination, suited to rare positives.")
+
     def __call__(
         self, 
         df: pd.DataFrame, 

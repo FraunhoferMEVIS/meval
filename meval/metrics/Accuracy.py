@@ -27,6 +27,10 @@ class Accuracy(ThresholdedComparisonMetric, MetricWithAnalyticalVar, MetricWithA
             test=test
         )
     
+    @property
+    def description(self) -> str | None:
+        return f"Share of the group's cases that are classified correctly ({self._decision_rule})."
+
     def __call__(
         self, 
         df: pd.DataFrame, 

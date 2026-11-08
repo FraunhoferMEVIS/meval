@@ -27,6 +27,11 @@ class DRMSCE(CurveBasedComparisonMetric):
             curve_family="reliability",
         )
 
+    @property
+    def description(self) -> str | None:
+        return ("Root-mean-squared gap between predicted probabilities and observed frequencies in the group, "
+                "debiased so that groups of different size are comparable. Lower is better.")
+
     def __call__(
         self, 
         df: pd.DataFrame, 

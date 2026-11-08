@@ -24,6 +24,11 @@ class Recall(ThresholdedComparisonMetric):
             test=test
         )
 
+    @property
+    def description(self) -> str | None:
+        return (f"Sensitivity: share of the group's positives that are predicted positive ({self._decision_rule}). "
+                "Low = positives missed.")
+
     def resolve_metrics(self, df: pd.DataFrame, validate: bool = True) -> list[ComparisonMetric]:
         if not self.per_class:
             y_true = self.get_y_true(df, validate=validate, return_array=True)
@@ -83,6 +88,12 @@ class _PerClassRecall(ComparisonMetric):
             direction="maximize",
             test=test
         )
+
+    @property
+    def description(self) -> str | None:
+        c = self.class_id
+        return (f"Share of the group's class-{c} cases that are predicted as class {c} (hard prediction, else the "
+                f"class with the highest probability). Low = class {c} missed.")
 
     def __call__(
         self,

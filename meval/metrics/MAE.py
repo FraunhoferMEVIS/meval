@@ -20,6 +20,10 @@ class MAE(MetricWithAnalyticalVar):
             test=test
         )
 
+    @property
+    def description(self) -> str | None:
+        return "Mean absolute difference between prediction and target over the group's cases. Lower is better."
+
     @staticmethod
     def _looks_like_binary_classification_inputs(
         y_true_np: np.ndarray,

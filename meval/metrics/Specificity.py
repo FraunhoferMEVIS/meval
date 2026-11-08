@@ -23,6 +23,11 @@ class Specificity(ThresholdedComparisonMetric):
             test=test
         )
 
+    @property
+    def description(self) -> str | None:
+        return (f"Share of the group's negatives that are predicted negative ({self._decision_rule}). "
+                "Low = false alarms.")
+
     def __call__(
         self, 
         df: pd.DataFrame, 

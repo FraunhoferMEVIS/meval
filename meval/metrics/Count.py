@@ -19,6 +19,10 @@ class Count(ComparisonMetric):
             test=test
         )
 
+    @property
+    def description(self) -> str | None:
+        return "Number of cases in the group."
+
     def __call__(
         self, 
         df: pd.DataFrame, 

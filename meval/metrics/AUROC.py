@@ -108,6 +108,11 @@ class AUROC(CurveBasedComparisonMetric, MetricWithAnalyticalCI, MetricWithAnalyt
             test=test
         )
 
+    @property
+    def description(self) -> str | None:
+        return ("Probability that a random positive of the group scores higher than a random negative of the same "
+                "group. Compares cases within the group only.")
+
     def check_suspicious_usage(self, df: pd.DataFrame) -> None:
         y_pred_prob_np = self.get_binary_y_pred_prob(df, validate=False, return_array=True)
         _raise_if_hard_binary_predictions(y_pred_prob_np)

@@ -112,7 +112,14 @@ class ComparisonMetric(ABC):
 
     def check_suspicious_usage(self, df: pd.DataFrame) -> None:
         return None
-    
+
+    @property
+    def description(self) -> str | None:
+        """What the metric measures in a group, in one or two plain sentences, for display next
+        to metric_name (e.g. as a tooltip). Says which way is bad where that is not obvious.
+        None if a metric has no description."""
+        return None
+
     @staticmethod
     def _get_group_mask(
             df: pd.DataFrame, 
@@ -669,4 +676,11 @@ class ThresholdedComparisonMetric(ComparisonMetric):
 
         if threshold is not None:
             self.metric_name = f'{self.metric_name} (thr={threshold:.2g})'
+
+    @property
+    def _decision_rule(self) -> str:
+        """How cases are classified, for descriptions."""
+        if self.threshold is None:
+            return "by the hard predictions"
+        return f"positive if the score is at least {self.threshold:.2g}"
 

@@ -38,6 +38,11 @@ class Average(MetricWithAnalyticalVar):
         self.metric_col = metric_col
         self.y_class = y_class
 
+    @property
+    def description(self) -> str | None:
+        cases = "cases" if self.y_class is None else f"cases with label {int(self.y_class)}"
+        return f"Mean of {self.metric_col} over the group's {cases}."
+
     def _class_mask(self, df: pd.DataFrame) -> np.ndarray:
         # One entry per row of df. Comparing with the class id works for bool labels
         # (False == 0, True == 1) and integer class ids alike; missing labels belong to no class.

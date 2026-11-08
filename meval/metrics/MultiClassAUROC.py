@@ -29,6 +29,14 @@ class MultiClassAUROC(ComparisonMetric):
         self.multiclass_mode: Literal['ovo', 'ovr'] = cast(Literal['ovo', 'ovr'], auroc_type.lower())
         self.min_samples_per_class: int = settings.auroc_min_cases_per_class if min_samples_per_class is None else min_samples_per_class
 
+    @property
+    def description(self) -> str | None:
+        if self.multiclass_mode == "ovo":
+            return ("Mean over all pairs of classes of the AUROC between the two classes within the group. "
+                    "Compares cases within the group only.")
+        return ("Mean over classes of the one-vs-rest AUROC within the group: each class against all others, scored "
+                "by its predicted probability.")
+
     def __call__(
         self, 
         df: pd.DataFrame, 

@@ -22,6 +22,11 @@ class Precision(ThresholdedComparisonMetric):
             test=test
         )
 
+    @property
+    def description(self) -> str | None:
+        return (f"Positive predictive value: share of the group's positive predictions that are truly positive "
+                f"({self._decision_rule}).")
+
     def __call__(
         self, 
         df: pd.DataFrame, 

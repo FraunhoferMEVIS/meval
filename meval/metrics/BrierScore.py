@@ -20,6 +20,13 @@ class BrierScore(ComparisonMetric):
         )
         self.balanced = balanced
 
+    @property
+    def description(self) -> str | None:
+        if self.balanced:
+            return ("Mean squared difference between predicted probability and label, averaged over the group's "
+                    "positives and its negatives with equal weight. Lower is better.")
+        return "Mean squared difference between predicted probability and label over the group's cases. Lower is better."
+
     def __call__(
         self, 
         df: pd.DataFrame, 

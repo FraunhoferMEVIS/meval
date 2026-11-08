@@ -24,6 +24,10 @@ class ProportionOfPos(ComparisonMetric):
             test=test
         )
 
+    @property
+    def description(self) -> str | None:
+        return "Share of positive cases in the group (prevalence)."
+
     def resolve_metrics(self, df: pd.DataFrame, validate: bool = True) -> list[ComparisonMetric]:
         if not self.per_class:
             y_true = self.get_y_true(df, validate=validate, return_array=True)
@@ -76,6 +80,10 @@ class _PerClassProportionOfPos(ComparisonMetric):
             direction="N/A",
             test=test
         )
+
+    @property
+    def description(self) -> str | None:
+        return f"Share of class-{self.class_id} cases in the group."
 
     def __call__(
         self,

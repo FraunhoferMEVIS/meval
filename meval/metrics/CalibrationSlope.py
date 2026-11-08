@@ -59,6 +59,11 @@ class CalibrationSlope(CurveBasedComparisonMetric, MetricWithAnalyticalCI, Metri
             curve_family="reliability",
         )
 
+    @property
+    def description(self) -> str | None:
+        return ("Slope b of the group's recalibration fit logit P(y=1) = a + b logit(score): 1 = well spread, "
+                "below 1 = overconfident (too extreme), above 1 = underconfident.")
+
     def _get_fit(self, df: pd.DataFrame, group_filter: GroupFilter | None, mask: MaskLike, validate: bool):
         """
         Fetch this group's shared CalibrationFit (see _calibration.py), computing
