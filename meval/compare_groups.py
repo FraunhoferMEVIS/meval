@@ -78,6 +78,9 @@ def calc_metric(df: pd.DataFrame,
 
 
 def calc_metric_wrap(args):
+    # Each pool task unpickles its own copy of df, so entries from earlier tasks can never be hit
+    # again, but would keep their copies of df alive until the worker exits.
+    clear_shared_computation_cache()
     return calc_metric(*args)
 
 

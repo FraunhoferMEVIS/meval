@@ -18,7 +18,8 @@ T = TypeVar("T")
 # dataframes, outside compare_groups). Holding the reference keeps the id from
 # being reused while the entry exists, and the identity check in _get_or_compute
 # makes that guarantee explicit. Memory is released by
-# clear_shared_computation_cache(), which compare_groups() calls on every run.
+# clear_shared_computation_cache(), which compare_groups() calls on every run
+# and pool workers call at the start of every task.
 _cache: dict[tuple[int, str, str], tuple[pd.DataFrame, object]] = {}
 
 # Sentinel group_name used by dataset_computation for values that are properties
@@ -108,5 +109,5 @@ def _get_or_compute(key: tuple[int, str, str], df: pd.DataFrame, compute_fn: Cal
 
 
 def clear_shared_computation_cache() -> None:
-    """Drop all cached values. Called at the start of each compare_groups() run."""
+    """Drop all cached values. Called at the start of each compare_groups() run and pool task."""
     _cache.clear()
