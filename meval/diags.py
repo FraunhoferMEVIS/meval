@@ -15,6 +15,7 @@ from plotly.subplots import make_subplots
 from scipy.stats import gaussian_kde
 
 from ._array_types import BoolArray, FloatArray
+from ._image_export import ExportSafeFigure, export_with_retries
 from .config import settings
 from .group_filter import GroupFilter
 from .metrics._calibration import loess_calibration
@@ -145,7 +146,7 @@ def process_export_file(
                 width = round(export_fig_size_cm[0] / 2.54 * 100)  # Convert cm to inches, then to pixels
                 height = round(export_fig_size_cm[1] / 2.54 * 100)  # Convert cm to inches, then to pixels
 
-            pio.write_image(fig, export_file, format='png', width=width, height=height, scale=dpi/100)
+            export_with_retries(lambda: pio.write_image(fig, export_file, format='png', width=width, height=height, scale=dpi/100))
 
         except Exception as e:
             print(f"An error occurred while saving PNG: {e}")
@@ -185,7 +186,7 @@ def metric_plot(
 
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
     traces = []
-    fig = go.Figure()
+    fig = ExportSafeFigure()
 
     if plot_groups is not None:
         metric_results_df = metric_results_df.loc[plot_groups, :]
@@ -377,9 +378,9 @@ def rel_diag(
     
     validate_plot_args(export_fig_path, export_fig_size_in, export_fig_size_cm)
     if add_risk_density:
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True)
+        fig = ExportSafeFigure(make_subplots(rows=2, cols=1, shared_xaxes=True))
     else:
-        fig = make_subplots(rows=1, cols=1, shared_xaxes=True)
+        fig = ExportSafeFigure(make_subplots(rows=1, cols=1, shared_xaxes=True))
 
     traces = []
 
@@ -661,7 +662,7 @@ def roc_diag(
     # Short forms of the axis titles, for the threshold marker's hover label.
     hover_labels = ("FPR", "TPR")
 
-    fig = go.Figure()
+    fig = ExportSafeFigure()
 
     traces = curve_diag(test_df, bootstrap_roc_curve, plot_groups=plot_groups, group_color_dict=group_color_dict)
 
@@ -747,7 +748,7 @@ def pr_diag(
     # Short forms of the axis titles, for the threshold marker's hover label.
     hover_labels = ("Recall", "Precision")
 
-    fig = go.Figure()
+    fig = ExportSafeFigure()
 
     traces = curve_diag(test_df, bootstrap_pr_curve, plot_groups=plot_groups, group_color_dict=group_color_dict)
 
@@ -889,7 +890,7 @@ def prg_diag(
     # Short forms of the axis titles, for the threshold marker's hover label.
     hover_labels = ("Recall gain", "Precision gain")
 
-    fig = go.Figure()
+    fig = ExportSafeFigure()
 
     traces = curve_diag(test_df, bootstrap_prg_curve, plot_groups=plot_groups, group_color_dict=group_color_dict)
 
@@ -1041,7 +1042,7 @@ def plot_metric_overview(
 
     cols = subplot_cols
     rows = math.ceil(num_subplots / cols)
-    fig = make_subplots(rows=rows, cols=cols)
+    fig = ExportSafeFigure(make_subplots(rows=rows, cols=cols))
 
     cmap = get_cmap(len(plot_groups))
 
@@ -1326,7 +1327,7 @@ def volcano_plot(
 
     msk = metric_results_df[metric.metric_name_pval].notna() & metric_results_df[metric.metric_name_effect].notna()
 
-    fig = go.Figure()
+    fig = ExportSafeFigure()
 
     traces = []
     traces.append(go.Scatter(
