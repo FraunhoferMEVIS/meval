@@ -79,7 +79,7 @@ def _from_terms(terms: list[DecompositionTerm], group: np.ndarray) -> float:
     total = 0.0
     for term in terms:
         rows = group & term.reference
-        if not rows.any():
+        if rows.sum() < term.min_cases:
             return np.nan
         total += term.weight * float(np.mean(term.score[rows]))
     return total
@@ -120,6 +120,7 @@ def test_decomposition_reproduces_the_metric_on_every_group(make_df, metric) -> 
         for term in terms:
             assert term.score.shape == term.reference.shape == (len(df),)
             assert term.reference.dtype == bool
+            assert term.min_cases >= 1
             assert np.isfinite(term.score[term.reference]).all()
         for group in _random_groups():
             expected = resolved_metric(df, group_mask=group)
@@ -151,6 +152,23 @@ def test_non_decomposable_metrics_return_none(make_df, metric) -> None:
     df = make_df()
     for resolved_metric in metric.resolve_metrics(df):
         assert resolved_metric.decompose(df) is None
+
+
+def test_class_conditional_auroc_term_carries_the_minimum_case_count() -> None:
+    """The value is NaN for a group with fewer than auroc_min_cases_per_class cases of y_class,
+    although the mean of the term's score over a single case is defined; min_cases encodes this."""
+    df = _binary_df()
+    metric = ClassConditionalAUROC(1)
+    (term,) = metric.decompose(df)
+    assert term.min_cases == settings.auroc_min_cases_per_class
+    y = df["y_true"].to_numpy()
+    for n_pos in (term.min_cases - 1, term.min_cases):
+        group = np.zeros(N, dtype=bool)
+        group[np.flatnonzero(y)[:n_pos]] = True
+        group[np.flatnonzero(~y)[:5]] = True
+        expected = metric(df, group_mask=group)
+        assert np.isnan(expected) == (n_pos < term.min_cases)
+        np.testing.assert_allclose(_from_terms([term], group), expected, rtol=1e-12, atol=1e-12, equal_nan=True)
 
 
 def test_per_class_wrappers_are_decomposed_after_resolution() -> None:

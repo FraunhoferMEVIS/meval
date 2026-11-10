@@ -106,5 +106,7 @@ def test_descriptions_follow_threshold_and_class() -> None:
     recall.set_threshold(0.02)
     assert "at least 0.02" in recall.description
     false_alarms, misses = (ClassConditionalAUROC(y, per_class=True).resolve_metrics(_multiclass_df())[2] for y in (0, 1))
-    assert false_alarms.metric_name == "AUROC[class=2] | y!=2" and "mistaken for class 2" in false_alarms.description
-    assert misses.metric_name == "AUROC[class=2] | y=2" and "class-2 cases are missed" in misses.description
+    assert false_alarms.metric_name == "AUROC[class=2] | y!=2"
+    assert "the group's non-class-2 cases score high (false alarms)" in false_alarms.description
+    assert misses.metric_name == "AUROC[class=2] | y=2"
+    assert "the group's class-2 cases score low (misses)" in misses.description

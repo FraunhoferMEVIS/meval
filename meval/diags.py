@@ -1328,8 +1328,6 @@ def volcano_plot(
 
     fig = go.Figure()
 
-    metric_results_df.loc[metric_results_df[metric.metric_name_pval] == 0, metric.metric_name_pval] = 1e-7
-
     traces = []
     traces.append(go.Scatter(
         x=metric_results_df.loc[msk, metric.metric_name_effect],

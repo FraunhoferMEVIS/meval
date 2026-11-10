@@ -48,8 +48,8 @@ def test_background_auroc_matches_direct_computation(metric_cls, group_class):
     expected = roc_auc_score(y[cases], df["y_pred_prob"].to_numpy()[cases])
 
     metric = metric_cls()
-    assert metric(df, group_mask=in_b) == pytest.approx(expected)
-    value, (lo, hi) = metric(df, group_mask=in_b, return_ci=True)
+    assert metric(df, group_mask=in_b, complement_mask=~in_b) == pytest.approx(expected)
+    value, (lo, hi) = metric(df, group_mask=in_b, complement_mask=~in_b, return_ci=True)
     assert lo < value < hi
     assert value == pytest.approx(AUROC()(df, group_mask=cases))
 
@@ -60,7 +60,9 @@ def test_background_auroc_detects_group_shift():
     df = _shortcut_frame()
     in_b = (df["g"] == "b").to_numpy()
     within = AUROC()(df, group_mask=in_b)
-    assert BPSN_AUROC()(df, group_mask=in_b) < within < BNSP_AUROC()(df, group_mask=in_b)
+    bpsn = BPSN_AUROC()(df, group_mask=in_b, complement_mask=~in_b)
+    bnsp = BNSP_AUROC()(df, group_mask=in_b, complement_mask=~in_b)
+    assert bpsn < within < bnsp
 
 
 def test_bpsn_of_complement_is_bnsp_and_their_tests_coincide():
@@ -68,7 +70,8 @@ def test_bpsn_of_complement_is_bnsp_and_their_tests_coincide():
     of BPSN and BNSP are the same xAUC disparity with opposite signs."""
     df = _shortcut_frame(n=1000)
     in_b = (df["g"] == "b").to_numpy()
-    assert BPSN_AUROC()(df, group_mask=~in_b) == pytest.approx(BNSP_AUROC()(df, group_mask=in_b))
+    assert BPSN_AUROC()(df, group_mask=~in_b, complement_mask=in_b) == pytest.approx(
+        BNSP_AUROC()(df, group_mask=in_b, complement_mask=~in_b))
     var_bpsn, diff_bpsn = est_variance_of_metric_diff(df, BPSN_AUROC(), in_b, ~in_b, max_num_bootstrap=0)
     var_bnsp, diff_bnsp = est_variance_of_metric_diff(df, BNSP_AUROC(), in_b, ~in_b, max_num_bootstrap=0)
     assert diff_bpsn == pytest.approx(-diff_bnsp)
@@ -83,20 +86,22 @@ def test_background_auroc_ci_is_that_of_auroc_on_the_selected_cases():
     y = df["y_true"].to_numpy()
     cases = (in_b & ~y) | (~in_b & y)
     for method in ("delong", "newcombe"):
-        assert BPSN_AUROC().get_ci(df, group_mask=in_b, method=method) == pytest.approx(
+        assert BPSN_AUROC().get_ci(df, group_mask=in_b, complement_mask=~in_b, method=method) == pytest.approx(
             AUROC().get_ci(df, group_mask=cases, method=method))
-        assert BPSN_AUROC().get_variance(df, group_mask=in_b, method=method) == pytest.approx(
+        assert BPSN_AUROC().get_variance(df, group_mask=in_b, complement_mask=~in_b, method=method) == pytest.approx(
             AUROC().get_variance(df, group_mask=cases, method=method))
-    assert BPSN_AUROC().get_ci(df, group_mask=in_b, method="delong") != pytest.approx(
-        BPSN_AUROC().get_ci(df, group_mask=in_b, method="newcombe"))
+    assert BPSN_AUROC().get_ci(df, group_mask=in_b, complement_mask=~in_b, method="delong") != pytest.approx(
+        BPSN_AUROC().get_ci(df, group_mask=in_b, complement_mask=~in_b, method="newcombe"))
 
 
 def test_background_auroc_rejects_resampling_and_precomputed_arrays():
     df = _shortcut_frame(n=200)
-    positions = np.flatnonzero((df["g"] == "b").to_numpy())
-    assert BPSN_AUROC()(df, group_mask=positions) == pytest.approx(BPSN_AUROC()(df, group_mask=df["g"] == "b"))
-    with pytest.raises(NotImplementedError):
-        BPSN_AUROC()(df, group_mask=np.concatenate([positions, positions[:5]]))
+    in_b = (df["g"] == "b").to_numpy()
+    positions = np.flatnonzero(in_b)
+    assert BPSN_AUROC()(df, group_mask=positions, complement_mask=~in_b) == pytest.approx(
+        BPSN_AUROC()(df, group_mask=df["g"] == "b", complement_mask=~in_b))
+    with pytest.raises(ValueError, match="complement_mask"):  # a mask alone does not define the complement
+        BPSN_AUROC()(df, group_mask=in_b)
     with pytest.raises(NotImplementedError):
         bootstrap_metric(df, BPSN_AUROC(), group_mask=positions, num_bootstrap=2)
     with pytest.raises(NotImplementedError):
@@ -115,9 +120,9 @@ def test_class_conditional_auroc_special_cases():
     # a group without the other class: BPSN (y_class=0) or BNSP (y_class=1)
     negatives_of_b, positives_of_b = in_b & ~y, in_b & y
     assert ClassConditionalAUROC(0)(df, group_mask=negatives_of_b) == pytest.approx(
-        BPSN_AUROC()(df, group_mask=negatives_of_b))
+        BPSN_AUROC()(df, group_mask=negatives_of_b, complement_mask=~negatives_of_b))
     assert ClassConditionalAUROC(1)(df, group_mask=positives_of_b) == pytest.approx(
-        BNSP_AUROC()(df, group_mask=positives_of_b))
+        BNSP_AUROC()(df, group_mask=positives_of_b, complement_mask=~positives_of_b))
     # the shortcut: b's negatives score high (low value), b's positives score high (high value)
     overall = AUROC()(df)
     assert ClassConditionalAUROC(0)(df, group_mask=in_b) < overall < ClassConditionalAUROC(1)(df, group_mask=in_b)
@@ -134,10 +139,10 @@ def test_class_conditional_auroc_is_a_mean_of_placements():
         assert value == pytest.approx(selected.mean())
         assert var == pytest.approx(selected.var(ddof=1) / len(selected))
         assert metric.get_variance(df, group_mask=in_b) == pytest.approx(var)
-        # resampled groups (repeated positions) work: the reference is fixed by the dataset
-        positions = np.flatnonzero(in_b)
-        assert metric(df, group_mask=np.concatenate([positions, positions])) == pytest.approx(value)
-        assert np.all(np.isfinite(bootstrap_metric(df, metric, group_mask=positions, num_bootstrap=5)))
+        # the value depends on the dataset's other-label cases, so it is not bootstrapped by
+        # resampling the group's rows; its CI is analytical
+        with pytest.raises(NotImplementedError):
+            bootstrap_metric(df, metric, group_mask=np.flatnonzero(in_b), num_bootstrap=5)
 
 
 def test_class_conditional_auroc_is_testable_without_the_other_class_in_the_group():
@@ -177,15 +182,19 @@ def test_per_class_metrics_are_one_vs_rest(metric):
     resolved = metric.resolve_metrics(df)
     assert len(resolved) == 3
     binary_cls = type(metric)
+    # BPSN and BNSP take the other class from the complement, which a mask alone does not define;
+    # ClassConditionalAUROC takes it from the whole dataset and rejects complement_mask.
+    complement = {} if binary_cls is ClassConditionalAUROC else {"complement_mask": ~in_b}
     for class_id, per_class_metric in enumerate(resolved):
-        binary = binary_cls(metric.y_class) if binary_cls is ClassConditionalAUROC else binary_cls()
+        binary = binary_cls(int(metric.group_class)) if binary_cls is ClassConditionalAUROC else binary_cls()
         ovr = _one_vs_rest_frame(df, class_id)
-        assert per_class_metric(df, group_mask=in_b) == pytest.approx(binary(ovr, group_mask=in_b))
-        assert per_class_metric.get_variance(df, group_mask=in_b) == pytest.approx(
-            binary.get_variance(ovr, group_mask=in_b))
+        assert per_class_metric(df, group_mask=in_b, **complement) == pytest.approx(
+            binary(ovr, group_mask=in_b, **complement))
+        assert per_class_metric.get_variance(df, group_mask=in_b, **complement) == pytest.approx(
+            binary.get_variance(ovr, group_mask=in_b, **complement))
     names = [m.metric_name for m in resolved]
     if binary_cls is ClassConditionalAUROC:
-        sign = "=" if metric.y_class else "!="
+        sign = "=" if metric.group_class else "!="
         assert names == [f"AUROC[class={c}] | y{sign}{c}" for c in range(3)]
         assert resolved[1](df) == pytest.approx(roc_auc_score(df["y_true"] == 1, df["y_pred_prob_1"]))
     else:

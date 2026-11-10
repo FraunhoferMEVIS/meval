@@ -18,11 +18,14 @@ class DecompositionTerm:
     weight * mean(score[group & reference]).
 
     score and reference have one entry per row of the dataframe the metric
-    was decomposed on; score is finite wherever reference is True.
+    was decomposed on; score is finite wherever reference is True. The metric
+    is NaN if group & reference has fewer than min_cases rows (e.g. AUROC's
+    minimum number of cases per class).
     """
     weight: float
     score: FloatArray
     reference: BoolArray
+    min_cases: int = 1
 
 
 class ComparisonMetric(ABC):
@@ -95,7 +98,8 @@ class ComparisonMetric(ABC):
 
             self(df, group_mask=G) == sum(t.weight * mean(t.score[G & t.reference]) for t in terms)
 
-        whenever every G & t.reference is non-empty (the metric is NaN otherwise).
+        whenever every G & t.reference has at least t.min_cases rows (the metric
+        is NaN otherwise).
         E.g. recall is mean(y_pred) over the positives, specificity mean(~y_pred)
         over the negatives, the balanced Brier score 0.5 * mean((y - p)^2) over
         the positives plus the same over the negatives.

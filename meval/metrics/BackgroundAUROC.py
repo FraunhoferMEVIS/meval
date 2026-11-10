@@ -306,4 +306,6 @@ class ClassConditionalAUROC(_GroupVsReferenceAUROC):
         if self.per_class and self.class_id is None:
             return None  # expanded into one metric per class by resolve_metrics()
         components = self._components(df, validate)
-        return [DecompositionTerm(1.0, components, np.isfinite(components))]
+        # Like the value, NaN for a group with fewer than auroc_min_cases_per_class cases of y_class.
+        return [DecompositionTerm(1.0, components, np.isfinite(components),
+                                  min_cases=settings.auroc_min_cases_per_class)]
