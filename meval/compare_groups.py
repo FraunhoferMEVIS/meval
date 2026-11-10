@@ -415,7 +415,8 @@ def compare_groups(df: pd.DataFrame,
             assert np.all(pvals_transformed >= pvals)
             assert np.isnan(pvals_transformed).sum() == 0
             assert np.all(pvals_transformed >= 0) and np.all(pvals_transformed <= 1)
-            assert np.all(pvals_transformed <= (len(pvals) * pvals))  # this would be Bonferroni
+            # This would be Bonferroni; multipletests computes p / (k / m), which can exceed m * p by rounding.
+            assert np.all(pvals_transformed <= (len(pvals) * pvals) * (1 + 1e-12))
             
             # The following line does NOT work since df[cols].values = ... only changes a view of the df, not the df
             #all_metric_results_df[pval_cols].values[mask.values] = pvals_transformed

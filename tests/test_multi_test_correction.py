@@ -6,6 +6,7 @@ os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
+import importlib
 import warnings
 
 import numpy as np
@@ -181,6 +182,25 @@ def test_multitest_with_multiple_pval_columns_writeback_is_stable():
         vals = all_metric_results_df[col].dropna().to_numpy()
         assert np.all(vals >= 0)
         assert np.all(vals <= 1)
+
+
+def test_bh_rounding_does_not_trip_the_bonferroni_sanity_check(monkeypatch):
+    # multipletests computes 0.019 / (1 / 3) = 0.057, which is one ulp above 3 * 0.019.
+    compare_groups_module = importlib.import_module("meval.compare_groups")
+    raw_pvals = {"group1=A": 0.019, "group1=B": 0.2, "group1=C": 0.5}
+    monkeypatch.setattr(compare_groups_module, "studentized_permut_pval",
+                        lambda df, metric, group_filter, **kwargs: (raw_pvals[group_filter.group_name], 0.0))
+    settings.load_testing_config(parallel=False)
+
+    test_df = pd.DataFrame({
+        'y_true': [True, False] * 6,
+        'y_pred': [True, False, False, True] * 3,
+        'group1': ['A'] * 4 + ['B'] * 4 + ['C'] * 4,
+    })
+
+    results, _ = compare_groups(df=test_df, metrics=[Accuracy(test=True)], group_by='group1', min_subgroup_size=1)
+
+    assert results.loc['group1=A', 'Acc pval'] == pytest.approx(3 * 0.019)
 
 
 if __name__ == '__main__':
