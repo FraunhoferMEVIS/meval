@@ -172,8 +172,13 @@ def bootstrap_variance_of_metric_diff(
 
 def est_variance_of_metric_diff(df, metric, group_mask, complement_mask, max_num_bootstrap):
     if isinstance(metric, MetricWithAnalyticalVar):
-        metric_val_a, metric_var_a = metric.get_variance(df, group_mask=group_mask, validate=False, return_val=True) # type: ignore
-        metric_val_b, metric_var_b = metric.get_variance(df, group_mask=complement_mask, validate=False, return_val=True) # type: ignore
+        # A metric whose value depends on the group's complement gets the other side as complement.
+        if metric.reference_class == "complement":
+            kwargs_a, kwargs_b = {"complement_mask": complement_mask}, {"complement_mask": group_mask}
+        else:
+            kwargs_a = kwargs_b = {}
+        metric_val_a, metric_var_a = metric.get_variance(df, group_mask=group_mask, validate=False, return_val=True, **kwargs_a) # type: ignore
+        metric_val_b, metric_var_b = metric.get_variance(df, group_mask=complement_mask, validate=False, return_val=True, **kwargs_b) # type: ignore
         metric_diff = metric_val_a - metric_val_b
         # This is only true if the two samples are independent! That is the case in the sample vs. complement situation.
         if settings.debug:

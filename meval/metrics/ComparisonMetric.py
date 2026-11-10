@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Callable, Hashable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -110,7 +110,35 @@ class ComparisonMetric(ABC):
         """
         return None
 
+    def _expand_per_class(
+            self,
+            df: pd.DataFrame,
+            per_class: bool,
+            make_metric: Callable[[int], "ComparisonMetric"],
+            validate: bool = True,
+            ) -> list["ComparisonMetric"]:
+        """resolve_metrics() for a metric with a per_class option: binary labels give [self],
+        multiclass labels give make_metric(class_id) for every class present in y_true."""
+        y_true = np.asarray(self.get_y_true(df, validate=validate, return_array=True))
+        name = type(self).__name__
+        if np.issubdtype(y_true.dtype, np.bool_):
+            if per_class:
+                raise NotImplementedError(f"{name}(per_class=True) with binary y_true is not implemented.")
+            return [self]
+        if not np.issubdtype(y_true.dtype, np.integer):
+            raise RuntimeError("y_true must be bool (binary) or integer (multiclass).")
+        if not per_class:
+            raise NotImplementedError(f"{name}(per_class=False) is currently only implemented for binary y_true.")
+        return [make_metric(int(class_id)) for class_id in np.unique(y_true)]
+
     def check_suspicious_usage(self, df: pd.DataFrame) -> None:
+        return None
+
+    @property
+    def shared_test(self) -> tuple[Hashable, int] | None:
+        """(key, sign) if this metric's group-vs-complement test is the same as that of other metrics:
+        the same key for all of them, and effect = sign * a difference common to them. compare_groups
+        then runs the test only once. None (default): the test is the metric's own."""
         return None
 
     @property
@@ -270,7 +298,14 @@ class ComparisonMetric(ABC):
         mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
+        class_id: int | None = None,
         ) -> pd.Series | np.ndarray:
+        """class_id: one-vs-rest on multiclass labels, i.e. whether each row is of that class."""
+        if class_id is not None:
+            return ComparisonMetric.get_multiclass_y_true(
+                df, group_filter=group_filter, mask=mask, validate=validate, return_array=return_array
+            ) == class_id
+
         y_true = ComparisonMetric.get_y_true(
             df,
             group_filter=group_filter,
@@ -355,10 +390,17 @@ class ComparisonMetric(ABC):
         mask: MaskLike | None = None,
         validate: bool = True,
         return_array: bool = False,
+        class_id: int | None = None,
         ) -> pd.Series | np.ndarray:
+        """class_id: one-vs-rest on multiclass data, i.e. the column y_pred_prob_{class_id}."""
 
         mask = ComparisonMetric._get_group_mask(df, group_filter=group_filter, mask=mask, validate=validate)
-        colname = ComparisonMetric._resolve_col_name(df, ComparisonMetric.y_pred_prob_cols, "pred_prob")
+        if class_id is None:
+            colname = ComparisonMetric._resolve_col_name(df, ComparisonMetric.y_pred_prob_cols, "pred_prob")
+        else:
+            colname = f"y_pred_prob_{class_id}"
+            if validate:  # also checks that the class probabilities of every row sum to one
+                ComparisonMetric.get_multiclass_y_pred_prob(df, mask=mask, validate=True, return_array=True)
         if return_array:
             y_pred_prob_np = ComparisonMetric._masked_array(df[colname], mask).astype(float, copy=False)
             if validate:

@@ -309,6 +309,30 @@ def auroc(target: LabelArray,
     return r  # type: ignore
 
 
+def auroc_components(target: BoolArray, preds: FloatArray) -> FloatArray:
+    """
+    Every case's own contribution to the AUROC: the share of the opposite class that the case is
+    ranked correctly against (positives above negatives in preds), with ties counting one half.
+
+    The mean over all positives and the mean over all negatives both equal the AUROC. These are the
+    components V10 and V01 from which the DeLong variance is computed, see
+    Elizabeth R. DeLong, David M. DeLong, Daniel L. Clarke-Pearson. Comparing the Areas under Two or
+    More Correlated Receiver Operating Characteristic Curves: A Nonparametric Approach. Biometrics
+    44(3), pp. 837-845, 1988. https://doi.org/10.2307/2531595
+
+    Requires at least one case of each class.
+    """
+    def share_below(values: FloatArray, sorted_reference: FloatArray) -> FloatArray:
+        return (np.searchsorted(sorted_reference, values, side="left")
+                + np.searchsorted(sorted_reference, values, side="right")) / (2 * len(sorted_reference))
+
+    pos, neg = preds[target], preds[~target]
+    components = np.empty(len(target), dtype=float)
+    components[target] = share_below(pos, np.sort(neg))
+    components[~target] = 1.0 - share_below(neg, np.sort(pos))
+    return components
+
+
 def brier_scores(
     target: LabelArray,
     pred_probs: FloatArray

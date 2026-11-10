@@ -271,6 +271,21 @@ def compare_groups(df: pd.DataFrame,
     for metric in metrics:
         metric.check_suspicious_usage(df)
 
+    # Metrics whose test is the same as that of an earlier metric (e.g. BNSP and BPSN AUROC) are not
+    # tested themselves; their pvals and effects are copied after the multiple testing correction, so
+    # the test is neither rerun nor counted twice.
+    first_with_shared_test: dict = {}
+    copied_tests = []  # (metric, metric whose test it shares, effect sign relative to that metric)
+    for metric in metrics:
+        if metric.test and metric.shared_test is not None:
+            key, sign = metric.shared_test
+            if key in first_with_shared_test:
+                source, source_sign = first_with_shared_test[key]
+                copied_tests.append((metric, source, sign * source_sign))
+            else:
+                first_with_shared_test[key] = (metric, sign)
+    copied_test_metrics = {id(metric) for metric, _, _ in copied_tests}
+
     run_parallel = settings.parallel and cpu_count() > 1
 
     if run_parallel and current_process().name == "MainProcess":
@@ -296,7 +311,7 @@ def compare_groups(df: pd.DataFrame,
         
         all_inputs = []
         for metric in metrics:
-            inputs = list(zip(itertools.repeat(df), itertools.repeat(metric), analysis_group_filters, itertools.repeat(test_groups)))
+            inputs = list(zip(itertools.repeat(df), itertools.repeat(metric), analysis_group_filters, itertools.repeat([] if id(metric) in copied_test_metrics else test_groups)))
             all_inputs.extend(inputs)
 
         with Pool(max(2, cpu_count() - 1), 
@@ -331,7 +346,7 @@ def compare_groups(df: pd.DataFrame,
 
             print('Evaluating ' + metric.metric_name + '...')
             for group_filter in tqdm(analysis_group_filters):
-                metric_results_lst.append(calc_metric(df, metric, group_filter, test_groups=test_groups))
+                metric_results_lst.append(calc_metric(df, metric, group_filter, test_groups=[] if id(metric) in copied_test_metrics else test_groups))
 
             with warnings.catch_warnings():
                 # pandas has a FutureWarning for concatenating DataFrames with Null entries, but I really do want these empty rows
@@ -415,6 +430,10 @@ def compare_groups(df: pd.DataFrame,
                     all_metric_results_df.loc[target_group_name, pval_col] = all_metric_results_df.loc[source_group_name, pval_col]
                     effect_col = pval_col[:-4] + "effect"
                     all_metric_results_df.loc[target_group_name, effect_col] = -all_metric_results_df.loc[source_group_name, effect_col]
+
+        for metric, source, sign in copied_tests:
+            all_metric_results_df[metric.metric_name_pval] = all_metric_results_df[source.metric_name_pval]
+            all_metric_results_df[metric.metric_name_effect] = sign * all_metric_results_df[source.metric_name_effect]
 
     print(f"Time spent evaluating all requested metrics on all subgroups: {time.time() - start_time:.1f} seconds")
     

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from ..group_filter import GroupFilter
+from ..stats.utils import mean_and_variance_of_mean
 from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike, MetricWithAnalyticalVar
 
 
@@ -71,14 +72,7 @@ class Average(MetricWithAnalyticalVar):
 
         mask = self._restrict_to_class(df, self.get_group_mask(df, group_filter, group_mask, validate=validate))
 
-        vals = ComparisonMetric._masked_array(df[self.metric_col], mask)
-
-        n_valid = np.isfinite(vals).sum()
-        if n_valid == 0:
-            avg, var = np.nan, np.nan
-        else:
-            avg = float(np.nanmean(vals))
-            var = np.nan if n_valid <= 1 else float(np.nanvar(vals, ddof=1) / n_valid)
+        avg, var = mean_and_variance_of_mean(ComparisonMetric._masked_array(df[self.metric_col], mask))
 
         return (avg, var) if return_var else avg
 
@@ -104,13 +98,6 @@ class Average(MetricWithAnalyticalVar):
         ) -> float | tuple[float, float]:
 
         mask = self._restrict_to_class(df, self.get_group_mask(df, group_filter, group_mask, validate=validate))
-        vals = ComparisonMetric._masked_array(df[self.metric_col], mask)
-
-        n_valid = np.isfinite(vals).sum()
-        if n_valid == 0:
-            val, var = np.nan, np.nan
-        else:
-            val = float(np.nanmean(vals))
-            var = np.nan if n_valid <= 1 else float(np.nanvar(vals, ddof=1) / n_valid)
+        val, var = mean_and_variance_of_mean(ComparisonMetric._masked_array(df[self.metric_col], mask))
 
         return (val, var) if return_val else var

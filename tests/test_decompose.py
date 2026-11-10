@@ -12,9 +12,12 @@ from meval.metrics import (
     AUROC,
     Accuracy,
     Average,
+    BNSP_AUROC,
+    BPSN_AUROC,
     BrierScore,
     CalibrationIntercept,
     CalibrationSlope,
+    ClassConditionalAUROC,
     Count,
     DecompositionTerm,
     DRMSCE,
@@ -98,6 +101,10 @@ DECOMPOSABLE = [
     (lambda: _binary_df(with_hard_pred=False), Specificity(threshold=0.4)),
     (_multiclass_df, Recall(per_class=True)),
     (_multiclass_df, ProportionOfPos(per_class=True)),
+    (_binary_df, ClassConditionalAUROC(0)),
+    (_binary_df, ClassConditionalAUROC(1)),
+    (_multiclass_df, ClassConditionalAUROC(0, per_class=True)),
+    (_multiclass_df, ClassConditionalAUROC(1, per_class=True)),
     (_regression_df, MAE()),
 ]
 
@@ -129,6 +136,8 @@ def test_balanced_brier_has_one_term_per_class() -> None:
     ("make_df", "metric"),
     [
         (_binary_df, AUROC()),
+        (_binary_df, BPSN_AUROC()),
+        (_binary_df, BNSP_AUROC()),
         (_binary_df, AUPRG()),
         (_binary_df, CalibrationSlope()),
         (_binary_df, CalibrationIntercept()),
@@ -148,3 +157,4 @@ def test_per_class_wrappers_are_decomposed_after_resolution() -> None:
     df = _multiclass_df()
     assert Recall(per_class=True).decompose(df) is None
     assert ProportionOfPos(per_class=True).decompose(df) is None
+    assert ClassConditionalAUROC(1, per_class=True).decompose(df) is None

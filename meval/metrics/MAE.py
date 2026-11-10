@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ..group_filter import GroupFilter
+from ..stats.utils import mean_and_variance_of_mean
 from .ComparisonMetric import ComparisonMetric, DecompositionTerm, MaskLike, MetricWithAnalyticalVar
 
 
@@ -71,16 +72,8 @@ class MAE(MetricWithAnalyticalVar):
         y_true_np = self.get_float_y_true(df, mask=mask, validate=validate, return_array=True)
         y_pred_np = self.get_float_y_pred(df, mask=mask, validate=validate, return_array=True)
         errs = np.abs(y_true_np - y_pred_np)
-        n_total = errs.size
-        n_valid = int(np.isfinite(errs).sum())
+        mae, var = mean_and_variance_of_mean(errs)
 
-        if n_valid == 0:
-            mae = np.nan
-            var = np.nan
-        else:
-            mae = float(np.nanmean(errs))
-            var = np.nan if n_valid <= 1 else float(np.nanvar(errs, ddof=1) / n_total)
-        
         if return_var:
             return mae, var
         else:
@@ -124,14 +117,7 @@ class MAE(MetricWithAnalyticalVar):
             y_pred_np = np.asarray(y_pred, dtype=float)
 
         errs = np.abs(y_true_np - y_pred_np)
-        n_valid = int(np.isfinite(errs).sum())
-
-        if n_valid == 0:
-            val = np.nan
-            var = np.nan
-        else:
-            val = float(np.nanmean(errs))
-            var = np.nan if n_valid <= 1 else float(np.nanvar(errs, ddof=1) / n_valid)
+        val, var = mean_and_variance_of_mean(errs)
 
         if return_val:
             return val, var

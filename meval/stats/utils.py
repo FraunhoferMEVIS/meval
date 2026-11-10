@@ -53,6 +53,16 @@ def nan_mean(
         return mean
 
 
+def mean_and_variance_of_mean(values: NumericArray) -> tuple[float, float]:
+    """Mean of the non-NaN values and the estimated variance of that mean, both NaN if there are
+    no finite values; the variance is NaN if there is only one."""
+    n_valid = int(np.isfinite(values).sum())
+    if n_valid == 0:
+        return np.nan, np.nan
+    not_nan = values[~np.isnan(values)]  # used in permutation loops; np.nanmean and np.nanvar are far slower
+    return float(not_nan.mean()), np.nan if n_valid <= 1 else float(not_nan.var(ddof=1) / n_valid)
+
+
 def ci_nan_quantile(
     a: NumericArray,
     q: float | FloatArray,
