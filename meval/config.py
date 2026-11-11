@@ -1,4 +1,6 @@
 import os
+from collections.abc import Callable
+from typing import Any
 
 
 # partially Claude-generated
@@ -29,6 +31,9 @@ class Settings:
         self.N_test_permut = self._get_env_int("MEVAL_N_TEST_PERMUT", 1000)
         self.max_N_student_bootstrap = self._get_env_int("MEVAL_MAX_N_STUDENT_BOOTSTRAP", 100)
         self.pval_early_stop_alpha = self._get_env_float("MEVAL_PVAL_EARLY_STOP_ALPHA", 0.01)
+        # Two-sided p-value of the studentized permutation test (see studentized_permut_pval):
+        # "equal_tails" doubles the smaller one-sided p; "abs" counts the shuffles with |S| >= |S_0|.
+        self.permut_two_sided = self._get_env_str("MEVAL_PERMUT_TWO_SIDED", "equal_tails")
         self.enable_bh_permut_sufficiency_guard = self._get_env_bool("MEVAL_ENABLE_BH_PERMUT_SUFFICIENCY_GUARD", True)
         self.testing = self._get_env_bool("MEVAL_TESTING", False)
 
@@ -88,6 +93,10 @@ class Settings:
         except ValueError:
             return default
     
+    def _get_env_str(self, name, default: str) -> str:
+        """Read an environment variable as a string."""
+        return os.environ.get(name, default)
+
     def _get_env_float(self, name, default: float | None) -> float | None:
         """Convert environment variable to float."""
         value = os.environ.get(name)
@@ -103,7 +112,7 @@ class Settings:
         import os
         
         # Example mappings between settings and environment variables
-        mappings = {
+        mappings: dict[str, tuple[Callable[[str, Any], Any], str]] = {
             "debug": (self._get_env_bool, f"{prefix}DEBUG"),
             "N_bootstrap": (self._get_env_int, f"{prefix}N_BOOTSTRAP"),
             "ci_alpha": (self._get_env_float, f"{prefix}CI_ALPHA"),
@@ -119,6 +128,7 @@ class Settings:
             "N_test_permut": (self._get_env_int, f"{prefix}N_TEST_PERMUT"),
             "max_N_student_bootstrap": (self._get_env_int, f"{prefix}MAX_N_STUDENT_BOOTSTRAP"),
             "pval_early_stop_alpha": (self._get_env_float, f"{prefix}PVAL_EARLY_STOP_ALPHA"),
+            "permut_two_sided": (self._get_env_str, f"{prefix}PERMUT_TWO_SIDED"),
             "enable_bh_permut_sufficiency_guard": (self._get_env_bool, f"{prefix}ENABLE_BH_PERMUT_SUFFICIENCY_GUARD"),
             "testing": (self._get_env_bool, f"{prefix}TESTING")
         }

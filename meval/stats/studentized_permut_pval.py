@@ -1,8 +1,8 @@
 """Studentized permutation test for a difference in a metric between a group and its complement.
 
 ``studentized_permut_pval`` implements Algorithm 1 of DiCiccio et al. (2020), with a two-sided
-p-value, handling of permutations on which the statistic is not computable, and conservative early
-stopping for clearly non-significant results.
+p-value (equal-tailed by default), handling of permutations on which the statistic is not
+computable, and conservative early stopping for clearly non-significant results.
 
 References
 ----------
@@ -22,7 +22,7 @@ References
 """
 
 import enum
-from typing import Literal
+from typing import Literal, cast, get_args
 
 import numpy as np
 import pandas as pd
@@ -57,6 +57,27 @@ _EARLY_STOP_CONFIDENCE = 0.9999  # confidence of the Clopper-Pearson lower bound
 class _Default(enum.Enum):
     """Sentinel for arguments whose default is read from ``settings`` at call time."""
     FROM_SETTINGS = enum.auto()
+
+
+# How studentized_permut_pval forms its two-sided p-value; see its Notes.
+TwoSided = Literal["equal_tails", "abs"]
+
+
+def _resolve_two_sided(two_sided: TwoSided | Literal[_Default.FROM_SETTINGS]) -> TwoSided:
+    """``two_sided``, or ``settings.permut_two_sided`` for the default; unknown values raise."""
+    value = settings.permut_two_sided if two_sided is _Default.FROM_SETTINGS else two_sided
+    if value not in get_args(TwoSided):
+        raise ValueError(f"Unknown two-sided permutation p-value {value!r}; expected one of {get_args(TwoSided)}.")
+    return cast(TwoSided, value)
+
+
+def permut_pval_floor_factor(two_sided: TwoSided | Literal[_Default.FROM_SETTINGS] = _Default.FROM_SETTINGS) -> int:
+    """Factor f of the two-sided p-value of ``studentized_permut_pval``: 2 for equal tails, 1 for |S|.
+
+    The p-value is min(1, f * (M + 1) / (N_valid + 1)), so the smallest one N_valid computable
+    permutations can give is f / (N_valid + 1). Defaults to ``settings.permut_two_sided``.
+    """
+    return 2 if _resolve_two_sided(two_sided) == "equal_tails" else 1
 
 
 if _NUMBA_AVAILABLE:
@@ -345,29 +366,34 @@ def _clopper_pearson_lower(M: int, N: int, confidence: float) -> float:
     return float(scipy.stats.beta.ppf(1.0 - confidence, M, N - M + 1))
 
 
-def _exceedances(valid: np.ndarray, S_base: float) -> int:
-    """Count the permuted statistics at least as extreme as ``S_base`` in absolute value.
+def _exceedances(valid: np.ndarray, S_base: float, two_sided: TwoSided) -> int:
+    """Count the permuted statistics at least as extreme as ``S_base``: M of the p-value.
 
-    Statistics within a relative tolerance of ``100 * eps`` below ``|S_base|`` count as ties and
-    hence as exceedances. Permutations that leave the statistic mathematically unchanged (e.g. ones
-    that only reorder rows within each group) can otherwise compute a few ulps below it, because
-    floating-point sums such as ``np.nanvar`` depend on the order of the elements. The validity of
-    the p-value relies on ties counting against ``S_base``. The tolerance is the one
-    ``scipy.stats.permutation_test`` uses.
+    For ``"abs"``, these are the statistics at least as large in absolute value. For
+    ``"equal_tails"``, M counts the smaller tail: the smaller of #{S <= S_base} and #{S >= S_base}.
+
+    Statistics within a relative tolerance of ``100 * eps`` of ``S_base`` count as ties and hence
+    as exceedances, in both tails for ``"equal_tails"``. Permutations that leave the statistic
+    mathematically unchanged (e.g. ones that only reorder rows within each group) can otherwise
+    compute a few ulps off it, because floating-point sums such as ``np.nanvar`` depend on the order
+    of the elements. The validity of the p-value relies on ties counting against ``S_base``. The
+    tolerance is the one ``scipy.stats.permutation_test`` uses.
     """
     tol = 100 * np.finfo(float).eps * abs(S_base)
+    if two_sided == "equal_tails":
+        return int(min(np.sum(valid <= S_base + tol), np.sum(valid >= S_base - tol)))
     return int(np.sum(np.abs(valid) >= np.abs(S_base) - tol))
 
 
-def _clearly_non_significant(S_permut: np.ndarray, S_base: float, alpha: float) -> bool:
+def _clearly_non_significant(S_permut: np.ndarray, S_base: float, alpha: float, two_sided: TwoSided) -> bool:
     """Early-stopping criterion of ``studentized_permut_pval``; see its Notes."""
     valid = S_permut[~np.isnan(S_permut)]
     if valid.size < _EARLY_STOP_MIN_PERMUT:
         return False
-    M = _exceedances(valid, S_base)
+    M = _exceedances(valid, S_base, two_sided)
     if M < _EARLY_STOP_MIN_M:
         return False
-    return _clopper_pearson_lower(M, valid.size, _EARLY_STOP_CONFIDENCE) > alpha
+    return permut_pval_floor_factor(two_sided) * _clopper_pearson_lower(M, valid.size, _EARLY_STOP_CONFIDENCE) > alpha
 
 
 def studentized_permut_pval(
@@ -378,6 +404,7 @@ def studentized_permut_pval(
     max_num_bootstrap: int | None = None,
     *,
     pval_early_stop_alpha: float | None | Literal[_Default.FROM_SETTINGS] = _Default.FROM_SETTINGS,
+    two_sided: TwoSided | Literal[_Default.FROM_SETTINGS] = _Default.FROM_SETTINGS,
     ) -> tuple[float, float]:
     """Two-sided studentized permutation test for a metric difference between a group and its complement.
 
@@ -390,7 +417,8 @@ def studentized_permut_pval(
     hypothesis that both groups follow the same distribution: the test is valid in finite samples
     under the strong null and, for asymptotically pivotal statistics, asymptotically valid under the
     weak null (DiCiccio et al., 2020, Sec. 2.3; Theorem 2 proves this for the AUROC difference).
-    Algorithm 1 is stated for the upper tail; this test is two-sided, based on |S|.
+    Algorithm 1 is stated for the upper tail. By default, this test applies it to both tails and
+    doubles the smaller p-value (equal tails); the alternative is a test based on |S| (see Notes).
 
     Parameters
     ----------
@@ -410,6 +438,9 @@ def studentized_permut_pval(
         Notes); it should be the level at which the corrected p-values are read. Defaults to
         ``settings.pval_early_stop_alpha``, read at call time. If None, all ``num_permut``
         permutations are run and every computable p-value is returned.
+    two_sided : {"equal_tails", "abs"}, optional
+        How the two-sided p-value is formed (see Notes). Defaults to ``settings.permut_two_sided``,
+        read at call time.
 
     Returns
     -------
@@ -420,15 +451,19 @@ def studentized_permut_pval(
 
     Notes
     -----
-    **P-value.** Let S_0 be the observed statistic, N_valid the number of permutations on which S
-    is computable, and M the number of those with |S| >= |S_0|, ties within floating-point
-    tolerance included. The p-value is (M + 1) / (N_valid + 1). Under the strong null and given the
-    pooled rows, the observed split and the sampled splits are independent uniform draws from all
-    splits of the pooled rows into groups of the original sizes, so |S_0| is equally likely to take
-    any rank among the N + 1 statistics, and P(p <= t) <= t for every t and every number of
-    permutations (Phipson and Smyth, 2010). Because the observed split may be drawn again, the
-    p-value is slightly conservative; this matters only if the number of distinct splits is small
-    (ibid.).
+    **P-value.** Let S_0 be the observed statistic and N_valid the number of permutations on which
+    S is computable. With ``two_sided="equal_tails"``, M is the smaller of #{S <= S_0} and
+    #{S >= S_0}, and the p-value is min(1, 2 (M + 1) / (N_valid + 1)): the one-sided p-value of the
+    tail S_0 lies in, doubled for testing both directions, as in ``scipy.stats.permutation_test``.
+    With ``two_sided="abs"``, M = #{|S| >= |S_0|} and the p-value is (M + 1) / (N_valid + 1). Ties
+    within floating-point tolerance count towards M. Under the strong null and given the pooled
+    rows, the observed split and the sampled splits are independent uniform draws from all splits of
+    the pooled rows into groups of the original sizes, so S_0 is equally likely to take any rank
+    among the N + 1 statistics. Each one-sided p-value and that of |S| then satisfy P(p <= t) <= t
+    for every t and every number of permutations (Phipson and Smyth, 2010), and so does the doubled
+    smaller one-sided p-value, by a union bound over the two tails. Because the observed split may
+    be drawn again, the p-value is slightly conservative; this matters only if the number of
+    distinct splits is small (ibid.).
 
     Leaving out non-computable permutations preserves this guarantee. Given that S_0 is computable,
     the observed split and the computable sampled splits are independent uniform draws from the
@@ -437,10 +472,24 @@ def studentized_permut_pval(
     sampled split is computable does not depend on which split was observed, so N_valid carries no
     information about the rank of S_0.
 
+    **Equal tails or |S|.** |S| treats S and -S as equally extreme, which suits a symmetric null
+    distribution. Near a bound of the metric (e.g. accuracy or AUROC near 1), the null distribution
+    of S is skewed: random groups with few errors get a variance estimate near zero and hence a
+    large positive S, so the upper tail is much heavier than the lower one. |S| judges a worse group
+    against that heavy tail and can lose nearly all power to detect it, also in groups of a hundred
+    cases or more. Equal tails judges each direction against its own tail. It needs twice the
+    permutations for the same smallest p-value, and loses some power for better groups where the
+    upper tail is heavy. Under the weak null, both rules are only asymptotically valid, and their
+    finite-sample errors differ: the skewness error of order n^(-1/2) cancels in |S| but not in a
+    single tail. Equal tails can therefore exceed its level for a group whose values are less spread
+    than a skewed pool, more so at small alpha, where |S| stays conservative. Both rules can exceed
+    it for groups more spread than the pool.
+
     **NaN p-values.** The p-value is NaN if a group is empty, if S_0 is not computable, or if no
     permuted statistic is. With ``pval_early_stop_alpha`` set, it is also NaN if non-computable
-    permutations alone keep it from reaching alpha: 1 / (N_valid + 1) > alpha although
-    1 / (num_permut + 1) <= alpha. Holm, Hochberg and Benjamini-Hochberg never reject a p-value above
+    permutations alone keep it from reaching alpha: f / (N_valid + 1) > alpha although
+    f / (num_permut + 1) <= alpha, with f = 2 for equal tails and 1 for |S|
+    (``permut_pval_floor_factor``). Holm, Hochberg and Benjamini-Hochberg never reject a p-value above
     alpha, so such a test cannot be significant, yet it would enlarge the family of tests corrected
     for. As NaN, it is left out of the correction, which ``compare_groups`` applies to non-NaN
     p-values only. The decision depends only on N_valid, so the remaining p-values stay valid. If
@@ -448,16 +497,19 @@ def studentized_permut_pval(
     checks the number of permutations up front when correcting with Benjamini-Hochberg.
 
     **Early stopping.** With ``pval_early_stop_alpha`` set, permutations are drawn in batches of 100.
-    After each batch except the last, the run stops if N_valid >= 100, M >= 20, and the one-sided
-    99.99 % Clopper-Pearson lower confidence bound (Clopper and Pearson, 1934) on the exceedance
-    probability exceeds alpha. The exceedance probability is the p-value an unlimited number of
-    permutations would give, and M is binomial given N_valid. The bound is at most
-    M / N_valid <= (M + 1) / (N_valid + 1), so a stopped run returns p > alpha. Stopping thus never
-    produces a p-value <= alpha that the full run would not have produced, and validity at all
-    levels up to alpha is unaffected. Above alpha, the p-value of a stopped run rests on fewer
-    permutations, so results are best read at levels up to alpha. A stop costs power if the
-    exceedance probability is in fact at most alpha; by a union bound over the K checks, this has
-    probability at most K * 1e-4 (9e-4 for 1000 permutations). Clopper-Pearson bounds hold for any M,
+    After each batch except the last, the run stops if N_valid >= 100, M >= 20, and f times the
+    one-sided 99.99 % Clopper-Pearson lower confidence bound (Clopper and Pearson, 1934) computed
+    from M and N_valid exceeds alpha. f times the bound is at most f M / N_valid <=
+    f (M + 1) / (N_valid + 1), so a stopped run returns p > alpha. Stopping thus never produces a
+    p-value <= alpha that the full run would not have produced, and validity at all levels up to
+    alpha is unaffected. Above alpha, the p-value of a stopped run rests on fewer permutations, so
+    results are best read at levels up to alpha. A stop costs power if the p-value an unlimited
+    number of permutations would give is in fact at most alpha: if the probability q of
+    |S| >= |S_0|, or for equal tails that of the less likely tail, is at most alpha / f. The count of
+    those permutations is binomial given N_valid, M is at most that count, and the bound increases
+    with M, so such a stop needs the bound from that count to exceed q, which has probability at
+    most 1e-4 per check. By a union bound over the K checks, a stop costs power with probability at
+    most K * 1e-4 (9e-4 for 1000 permutations). Clopper-Pearson bounds hold for any M,
     so the M >= 20 floor is only an extra margin, after the M >= 10 rule that Knijnenburg et al.
     (2009) need for their normal-approximation bounds. Stopped runs are exempt from the refusal
     above: their N_valid is small because they stopped, and their p-value exceeds alpha anyway.
@@ -465,6 +517,8 @@ def studentized_permut_pval(
     alpha: float | None = (
         settings.pval_early_stop_alpha if pval_early_stop_alpha is _Default.FROM_SETTINGS else pval_early_stop_alpha
     )
+    two_sided = _resolve_two_sided(two_sided)
+    floor_factor = permut_pval_floor_factor(two_sided)
 
     if num_permut is None:
         num_permut = settings.N_test_permut
@@ -523,7 +577,7 @@ def studentized_permut_pval(
         if (
             alpha is not None
             and batch_end < num_permut
-            and _clearly_non_significant(S_permut[:batch_end], S_base, alpha)
+            and _clearly_non_significant(S_permut[:batch_end], S_base, alpha, two_sided)
         ):
             S_permut = S_permut[:batch_end]
             early_stopped = True
@@ -535,13 +589,13 @@ def studentized_permut_pval(
         return np.nan, metric_diff
 
     if alpha is not None and not early_stopped:
-        alpha_reachable_with_all = 1 / (num_permut + 1) <= alpha
-        alpha_reachable_with_valid = 1 / (valid.size + 1) <= alpha
+        alpha_reachable_with_all = floor_factor / (num_permut + 1) <= alpha
+        alpha_reachable_with_valid = floor_factor / (valid.size + 1) <= alpha
         if alpha_reachable_with_all and not alpha_reachable_with_valid:
             # Only non-computable permutations keep this test from reaching alpha (see Notes).
             return np.nan, metric_diff
 
-    pval = (_exceedances(valid, S_base) + 1) / (valid.size + 1)
+    pval = min(1.0, floor_factor * (_exceedances(valid, S_base, two_sided) + 1) / (valid.size + 1))
 
     if settings.debug and early_stopped:
         assert alpha is not None and pval > alpha

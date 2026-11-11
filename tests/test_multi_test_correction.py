@@ -158,6 +158,56 @@ def test_can_override_bh_permut_sufficiency_guard_for_testing():
         settings.from_dict(old_settings)
 
 
+def _guard_disables_testing(df, metrics, group_by, num_permut, alpha):
+    """Run compare_groups with the |S| floor (f = 1) and report whether the permutation guard fired."""
+    old_settings = settings.to_dict().copy()
+    try:
+        settings.update(N_test_permut=num_permut, pval_early_stop_alpha=alpha, parallel=False, testing=False,
+                        enable_bh_permut_sufficiency_guard=True, permut_two_sided="abs")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            compare_groups(df=df, metrics=metrics, group_by=group_by, min_subgroup_size=1,
+                           test_correction_method="fdr_bh")
+        return any("num_permut too small and num_groups too large" in str(w.message) for w in caught)
+    finally:
+        settings.from_dict(old_settings)
+
+
+def _binary_group_df(n=200, seed=0):
+    rng = np.random.default_rng(seed)
+    y_true = rng.random(n) < 0.4
+    return pd.DataFrame({
+        'y_true': y_true,
+        'y_pred_prob': np.clip(0.5 * y_true + 0.5 * rng.random(n), 0, 1),
+        'group1': np.repeat(['A', 'B'], n // 2),
+    })
+
+
+def test_permutation_guard_does_not_count_the_untested_all_group():
+    # m = 1 (group1=A; B is its binary complement, 'all' is never tested): 1/50 passes alpha = 0.03, 2/50 would not.
+    df = _binary_group_df().assign(y_pred=lambda d: d.y_pred_prob > 0.5)
+    assert not _guard_disables_testing(df, [Accuracy(test=True)], "group1", num_permut=50, alpha=0.03)
+
+
+def test_permutation_guard_counts_a_shared_test_once():
+    # BPSN and BNSP share one test, so m = 1 again, not 2.
+    from meval.metrics import BNSP_AUROC, BPSN_AUROC
+
+    metrics = [BPSN_AUROC(test=True), BNSP_AUROC(test=True)]
+    assert not _guard_disables_testing(_binary_group_df(), metrics, "group1", num_permut=50, alpha=0.03)
+
+
+def test_permutation_guard_counts_every_class_of_a_per_class_metric():
+    # Recall(per_class=True) on three classes runs three tests per group: 3/100 exceeds alpha = 0.025.
+    from meval.metrics import Recall
+
+    rng = np.random.default_rng(1)
+    y_true = rng.integers(0, 3, 120)
+    df = pd.DataFrame({'y_true': y_true, 'y_pred': np.where(rng.random(120) < 0.7, y_true, rng.integers(0, 3, 120)),
+                       'group1': np.repeat(['A', 'B'], 60)})
+    assert _guard_disables_testing(df, [Recall(per_class=True, test=True)], "group1", num_permut=100, alpha=0.025)
+
+
 def test_multitest_with_multiple_pval_columns_writeback_is_stable():
     settings.load_testing_config(parallel=False)
     settings.update(testing=False, enable_bh_permut_sufficiency_guard=True, N_test_permut=1000)

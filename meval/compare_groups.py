@@ -24,7 +24,10 @@ from .reporting import generate_report_file
 from .select_groups import select_extreme_tested_groups
 from .stats.cache import clear_shared_computation_cache
 from .stats.confidence_intervals import bootstrap_ci
-from .stats.studentized_permut_pval import studentized_permut_pval
+from .stats.studentized_permut_pval import (
+    permut_pval_floor_factor,
+    studentized_permut_pval,
+)
 
 FilePath = str | PathLike[str]
 
@@ -204,63 +207,6 @@ def compare_groups(df: pd.DataFrame,
     # ------------------------------------------------------- #
     start_time = time.time()
 
-    if any([metric.test for metric in metrics]):
-        
-        assert group_by is not None, "Cannot test for differences with no stratifying ('group_by') attributes specified."
-
-        # If we test eg the "sex=male" group, and sex is a binary attribute in the df, then we do not need
-        # to repeat all calculations for the "sex=female" group - we have already done that (assuming sex to be binary).
-        # The pval will be the same, the effect will be the negative.
-        # Notice that this is also crucial so we don't over-correct for too many tests below!
-
-        # All grouping attrs are at least 2-ary, as per the assert check a bit further above.
-        # For our hypothesis testing purposes, we are interested in the case where one group is exactly the complement of another.
-        # (This is because we're testing each group for differences w.r.t. its complement.)
-        # We here define the complement as attaining different values in *all* group-defining attributes. (Cf. group_filter.py.)
-        # I.e. the complement of "male and old" is "non-male *and* non-old". 
-        # So one group being the exact complement of another can happen only when all group-defining attributes are binary.
-        # (As a counterexample, consider the case of 3 groups A, B, C. The complement of each is the union of the other two, 
-        #  so there are no exact complements.)
-        # (Even in that case, it does not *have* to happen because one of the two complementary groups could be too small.)
-
-        test_groups, test_group_complements = find_binary_complements(df, group_by, analysis_group_filters)
-
-        # Pre-flight check: with permutation floor 1/N and BH correction over m tests,
-        # the best-case corrected p-value for an isolated strong signal is m/N.
-        # If m/N exceeds the significance alpha, significance cannot be detected.
-        if (
-            test_correction_method == "fdr_bh"
-            and settings.enable_bh_permut_sufficiency_guard
-            and not settings.testing
-        ):
-            sig_alpha = settings.pval_early_stop_alpha
-            if sig_alpha is not None:
-                n_test_metrics = sum(metric.test for metric in metrics)
-                n_tests = n_test_metrics * len(test_groups)
-                min_detectable_pval_corr = n_tests / settings.N_test_permut if settings.N_test_permut > 0 else np.inf
-                if n_tests > 0 and min_detectable_pval_corr > sig_alpha:
-                    warnings.warn(
-                        "num_permut too small and num_groups too large to identify significant pvals; "
-                        "under fdr_bh, the best-case corrected minimum is n_tests/N_test_permut="
-                        f"{n_tests}/{settings.N_test_permut}={min_detectable_pval_corr:.4g}, "
-                        f"which exceeds alpha={sig_alpha:.4g}. "
-                        "Proceeding without significance testing. "
-                        "To re-enable testing, increase settings.N_test_permut "
-                        "(env: MEVAL_N_TEST_PERMUT), or relax the target alpha via "
-                        "settings.pval_early_stop_alpha (env: MEVAL_PVAL_EARLY_STOP_ALPHA), "
-                        "or reduce the number of tested groups/metrics. "
-                        "To bypass this pre-check (e.g. in tests), set "
-                        "settings.enable_bh_permut_sufficiency_guard=False "
-                        "(env: MEVAL_ENABLE_BH_PERMUT_SUFFICIENCY_GUARD=false).",
-                        UserWarning,
-                    )
-                    test_groups = []
-                    test_group_complements = {}
-
-    else:
-        test_groups = None
-        test_group_complements = {}
-
     if threshold is not None:
         for metric in metrics:
             if isinstance(metric, ThresholdedComparisonMetric) and metric.threshold is None:
@@ -288,6 +234,67 @@ def compare_groups(df: pd.DataFrame,
             else:
                 first_with_shared_test[key] = (metric, sign)
     copied_test_metrics = {id(metric) for metric, _, _ in copied_tests}
+
+    if any([metric.test for metric in metrics]):
+        
+        assert group_by is not None, "Cannot test for differences with no stratifying ('group_by') attributes specified."
+
+        # If we test eg the "sex=male" group, and sex is a binary attribute in the df, then we do not need
+        # to repeat all calculations for the "sex=female" group - we have already done that (assuming sex to be binary).
+        # The pval will be the same, the effect will be the negative.
+        # Notice that this is also crucial so we don't over-correct for too many tests below!
+
+        # All grouping attrs are at least 2-ary, as per the assert check a bit further above.
+        # For our hypothesis testing purposes, we are interested in the case where one group is exactly the complement of another.
+        # (This is because we're testing each group for differences w.r.t. its complement.)
+        # We here define the complement as attaining different values in *all* group-defining attributes. (Cf. group_filter.py.)
+        # I.e. the complement of "male and old" is "non-male *and* non-old". 
+        # So one group being the exact complement of another can happen only when all group-defining attributes are binary.
+        # (As a counterexample, consider the case of 3 groups A, B, C. The complement of each is the union of the other two, 
+        #  so there are no exact complements.)
+        # (Even in that case, it does not *have* to happen because one of the two complementary groups could be too small.)
+
+        test_groups, test_group_complements = find_binary_complements(df, group_by, analysis_group_filters)
+
+        # Pre-flight check: with permutation floor about f/N (f = permut_pval_floor_factor(): 1 for
+        # |S|, 2 for equal tails) and BH correction over m tests, the best-case corrected p-value
+        # for an isolated strong signal is about f*m/N.
+        # If f*m/N exceeds the significance alpha, significance cannot be detected.
+        # m counts the p-values the correction will see: every resolved metric that runs its own test
+        # (per-class metrics once per class, a shared test once), in every tested group but 'all'.
+        if (
+            test_correction_method == "fdr_bh"
+            and settings.enable_bh_permut_sufficiency_guard
+            and not settings.testing
+        ):
+            sig_alpha = settings.pval_early_stop_alpha
+            if sig_alpha is not None:
+                n_test_metrics = sum(metric.test and id(metric) not in copied_test_metrics for metric in metrics)
+                n_tests = n_test_metrics * sum(group_name != 'all' for group_name in test_groups)
+                floor_factor = permut_pval_floor_factor()
+                min_detectable_pval_corr = floor_factor * n_tests / settings.N_test_permut if settings.N_test_permut > 0 else np.inf
+                if n_tests > 0 and min_detectable_pval_corr > sig_alpha:
+                    warnings.warn(
+                        "num_permut too small and num_groups too large to identify significant pvals; "
+                        f"under fdr_bh, the best-case corrected minimum is {floor_factor}*n_tests/N_test_permut="
+                        f"{floor_factor}*{n_tests}/{settings.N_test_permut}={min_detectable_pval_corr:.4g}, "
+                        f"which exceeds alpha={sig_alpha:.4g}. "
+                        "Proceeding without significance testing. "
+                        "To re-enable testing, increase settings.N_test_permut "
+                        "(env: MEVAL_N_TEST_PERMUT), or relax the target alpha via "
+                        "settings.pval_early_stop_alpha (env: MEVAL_PVAL_EARLY_STOP_ALPHA), "
+                        "or reduce the number of tested groups/metrics. "
+                        "To bypass this pre-check (e.g. in tests), set "
+                        "settings.enable_bh_permut_sufficiency_guard=False "
+                        "(env: MEVAL_ENABLE_BH_PERMUT_SUFFICIENCY_GUARD=false).",
+                        UserWarning,
+                    )
+                    test_groups = []
+                    test_group_complements = {}
+
+    else:
+        test_groups = None
+        test_group_complements = {}
 
     run_parallel = settings.parallel and cpu_count() > 1
 
