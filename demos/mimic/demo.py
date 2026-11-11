@@ -71,5 +71,5 @@ def mimic_demo():
 if __name__ == "__main__":
     # fix for multiprocessing / pdb bug: https://github.com/python/cpython/issues/87115
     __spec__ = None
-    settings.update(N_test_permut=10000)
+    settings.update(N_test_permut=50000)
     mimic_demo()
