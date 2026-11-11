@@ -25,6 +25,7 @@ dependencies = [
 	"pandas",
 	"pandera>=0.24.0",
 	"plotly",
+	"psutil",
 	"scikit-learn",
 	"scipy",
 	"seaborn",
